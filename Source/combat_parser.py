@@ -4,9 +4,13 @@ import time
 from datetime import datetime
 import random
 
+
 class Parser:
     '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
     PATTERNS = {
+        "player_ability_activate": re.compile(
+            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You activated the (?P<ability>.+?) power\."
+        ),
         "player_hit_roll": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
@@ -51,6 +55,7 @@ class Parser:
     LOG_FILE_PATH = ""
     PLAYER_NAME = ""
     COMBAT_SESSION_TIMEOUT = 30 # Seconds, determines how long to wait between 
+    CONSOLE_VERBOSITY = 2 # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Errors, Warnings, Info and Debug
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
     def __init__(self, LOG_FILE_PATH = ""):
 
@@ -62,7 +67,7 @@ class Parser:
         for key, regex in self.PATTERNS.items():
             updated_pattern = regex.pattern.replace('PLAYER_NAME', player_name)
             updated_regex = re.compile(updated_pattern)
-            print('Updated Regex: ', updated_regex)
+            if self.CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
             updated_patterns[key] = updated_regex
         return updated_patterns
     
@@ -71,9 +76,6 @@ class Parser:
         for key, regex in self.PATTERNS.items():
             match = regex.match(log_line)
             if match:
-                #print('Matched Event: ', key)
-                #print(match.groupdict())
-                #self.interpret_event(key, match.groupdict())
                 return (key, match.groupdict())
         return '',[]
 
@@ -81,9 +83,8 @@ class Parser:
         self.session_count += 1
         self.session.append(CombatSession(timestamp))
         self.combat_session_live = True
-        print ("     Combat Session Started: ", self.session_count)
+        if self.CONSOLE_VERBOSITY >= 2: print ("     Combat Session Started: ", self.session_count)
         return self.session[-1]
-
     def check_session(self, timestamp):
         '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
 
@@ -96,14 +97,12 @@ class Parser:
             else:
                 return 1 # Session still active and valid
         return 0 # No active session
-
     def end_session(self):
         '''Ends the current combat session'''
         self.session[-1].update_duration()
         self.combat_session_live = False
         self.add_global_combat_duration(self.session[-1].get_duration())
-        print ("     Ended Combat Session: ", self.session_count, " With a duration of ", self.session[-1].get_duration(), " seconds")
-
+        if self.CONSOLE_VERBOSITY >= 2: print ("     Ended Combat Session: ", self.session_count, " With a duration of ", self.session[-1].get_duration(), " seconds")
     def update_session_time(self, timestamp):
         '''Updates the current combat session time'''
         self.session[-1].update_session_time(timestamp)
@@ -125,6 +124,9 @@ class Parser:
 
         if status == -1: # -1 indicates that the session has timed out
             self.end_session()
+        if event == "player_ability_activate":
+            update_session_and_time()
+            self.handle_event_player_power_activate(data)
 
         if event == "player_hit_roll" or event == "player_pet_hit_roll":
             update_session_and_time()
@@ -145,10 +147,15 @@ class Parser:
             self.set_player_name(data["player_name"])
             self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
 
+    def handle_event_player_power_activate(self, data):
 
+        # We'll use these power_activation events in the log to create new abilties in our list
+        if data["ability"] not in self.Abilities:
+            self.Abilities[data["ability"]] = Ability(data["ability"])
     def handle_event_player_damage(self, data, pet=False):
         '''Handles a player damage event'''
-        # First, ignore any matches that is the player hitting themselves
+
+        # First, ignore any matches where is the player hitting themselves
         if data["target"] == self.PLAYER_NAME:
             # print('Player hit themselves, with ', data["ability"] , '. Ignoring')
             return
@@ -162,16 +169,13 @@ class Parser:
             search_ability = data["ability"]
 
         if search_ability not in self.Abilities:
-            self.Abilities[search_ability] = Ability(search_ability, None, True)
-            #self.Abilities[data["ability"]].ability_used(True)
-            #print('Ability Created: ', self.Abilities[data["ability"]].name)
-
+            self.Abilities[search_ability] = Ability(search_ability, None, True) # Create a new ability and flag it as a proc (no hit roll or ability activation recorded)
+            
         active_ability = self.Abilities[search_ability]
         active_ability.add_damage(DamageComponent(data["damage_type"], data["damage_value"]))
-        #print('Ability Executed:', active_ability.name)
-
     def handle_event_player_hit_roll(self, data, pet=False):
         '''Handles a player hit roll event'''
+
         # First, ignore any matches that is the player hitting themselves
         if data["target"] == self.PLAYER_NAME:
             print('Player hit themselves, with ', data["ability"] , '. Ignoring')
@@ -182,7 +186,7 @@ class Parser:
         else:
             search_ability = data["ability"]
 
-        # Check for ability in directory, if it doesn't exist, create it.
+        # Check for ability in directory, if it doesn't exist, create it. (fallback from player_power_activate event)
         if search_ability not in self.Abilities:
             self.Abilities[search_ability] = Ability(search_ability)
 
@@ -190,7 +194,6 @@ class Parser:
         active_ability.ability_used(data["outcome"] == "HIT")
 
         #print('Ability Executed:', active_ability.name)
-
     def handle_event_reward_gain(self, data):
         #return
         '''Handles a reward gain event'''
@@ -243,14 +246,6 @@ class Parser:
         '''Returns the total inf'''
         return self.INF_VALUE
 
-    def run_test_data(self, log_lines):
-        
-        extracted_data = []
-        for line in log_lines:
-            extracted_data = self.extract_from_line(line)
-            print(extracted_data)
-        return extracted_data
-
     def set_log_file(self, file_path):
         '''takes the file path and sets the log file to the file path'''
         self.LOG_FILE_PATH = file_path
@@ -286,6 +281,7 @@ class Parser:
         print('          Player Name Updated to: ', self.PLAYER_NAME)
         self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
     
+
     def process_existing_log(self, file_path):
         '''Analyses a log file that has already been created. Function will terminate once the bottom of the file is reached'''
         
@@ -306,7 +302,7 @@ class Parser:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 if event is not "":
-                    print(event, data)
+                    if self.CONSOLE_VERBOSITY == 3: print(event, data)
                     self.interpret_event(event, data)
         _test_show_results()
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
@@ -355,8 +351,7 @@ class Parser:
             _, file_path = command.split(" ", 1)
             self.process_existing_log(file_path)
         else:
-            print("Unknown command. Please enter a valid command.")
-            
+            print("Unknown command. Please enter a valid command.")      
     def clean_variables(self):
         '''Reset all'''
         self.line_count = 0
@@ -374,6 +369,8 @@ class Parser:
         self.Abilities = {} # Stores a list of abilities
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
+
+        if self.CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
         
 class CombatSession:
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
@@ -408,6 +405,7 @@ class Character:
     def add_ability(self, ability):
         '''Adds an ability to the character'''
         self.abilities[ability.name] = ability
+
 class Ability:
     '''Stores data about an ability used'''
     def __init__(self, name, hit=None, proc=False):
@@ -425,13 +423,12 @@ class Ability:
         for component in self.damage:
             if component.type == damage_component.type:
                 component.add_damage(damage_component.type, damage_component.total_damage)
+                if self.proc: self.ability_used(True)
                 return
         self.damage.append(damage_component)
         self.damage[-1].add_damage(damage_component.type, damage_component.total_damage)
 
-        if self.proc: # If the ability is a proc, we'll need to incremement the ability hit count as there will be no hitroll for this ability.
-            self.ability_used(True)
-        #print('Added new Damage Component: ', damage_component.type, 'to Ability: ', self.name)
+        if self.proc: self.ability_used(True) # We'll log a dummy hit for procs, since we don't have a hit roll for them
     
     def ability_used(self, hit):
         self.count += 1
@@ -625,8 +622,9 @@ def _test_show_results():
     print("---- ABILITY DATA -----")
     # loop down the ability dictionary and print the ability name, and '(proc)' if the ability is a proc, accuracy % and total damage
     for ability in self.Abilities:
+        if self.Abilities[ability].get_count() == 0: continue # skip abilities with no count
         print(self.Abilities[ability].name, ' (proc)' if self.Abilities[ability].proc else '',
-              '\n    DPS: ', self.Abilities[ability].get_dps(self.global_combat_duration), 'Average Damage: ', self.Abilities[ability].get_average_damage(),
+              '\n    DPS: ', self.Abilities[ability].get_dps(self.global_combat_duration), 'Avg: ', self.Abilities[ability].get_average_damage(),
               '\n    Accuracy: ', self.Abilities[ability].get_accuracy(), '% | Count: ', self.Abilities[ability].count, '| Hits: ', self.Abilities[ability].hits, '|')
         
         
