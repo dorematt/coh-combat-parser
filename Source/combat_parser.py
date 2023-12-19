@@ -11,13 +11,13 @@ class Parser:
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
         "player_pet_hit_roll": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^.]+):? (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
+            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
         "player_damage": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
         ),
         "player_pet_damage": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^.]+):? (?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
+            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
         ),
        # "foe_hit_roll": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
@@ -50,7 +50,7 @@ class Parser:
     }
     LOG_FILE_PATH = ""
     PLAYER_NAME = ""
-    COMBAT_SESSION_TIMEOUT = 30 # Seconds,  If no events are found within this time, the combat session will be closed
+    COMBAT_SESSION_TIMEOUT = 30 # Seconds, determines how long to wait between 
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
     def __init__(self, LOG_FILE_PATH = ""):
 
@@ -280,7 +280,6 @@ class Parser:
                     return data["player_name"]
         print('          Unable to find Player Name in log')
         return ""
-
     def set_player_name(self, player_name):
         '''Sets the player name'''
         self.PLAYER_NAME = player_name
@@ -633,7 +632,7 @@ def _test_show_results():
         
         # loop down the damage components and print the damage type, total damage and count
         for component in self.Abilities[ability].damage:
-            print('      Damage Type: ', component.type,'| T:', component.total_damage,'| H:', component.highest_damage, '| L:', component.lowest_damage, '| Count: ', component.count)
+            print('        Damage Type: ', component.type,'| T:', component.total_damage,'| H:', component.highest_damage, '| L:', component.lowest_damage, '| Count: ', component.count)
         print('------------------')
 
     total_damage = 0
