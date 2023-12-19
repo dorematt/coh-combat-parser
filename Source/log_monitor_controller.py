@@ -1,26 +1,50 @@
 from log_monitor_ui import LogMonitorUI
-from parser_model import Parser
+from combat_parser import Parser
 
 class LogMonitorController:
-    def __init__(self):
-        self.ui = LogMonitorUI(self)
-        self.parser = Parser()
-        self.ui.start()
+    parser = None
+    ui = None
+    def __init__(self, ui, parser):
+        print("Initializing Log Monitor Controller")
+        self.parser = parser
+        self.ui = ui
+        print("DEBUG")
+         
+
+    def _bind(self) -> None:
+        # self.ui.browse_button.bind("<Button-1>", self.browse_file)
+        self.ui.start_stop_button.config(command=self.start_stop_log)
+        self.ui.process_button.config(command=self.process_existing_log)
+        self.ui.test_button.config(command=self.run_test_log)
+        print("Bindings Done.")
 
     def process_existing_log(self, file_path):
+        print("Processing existing log", file_path)
+        self.ui.process_button['text'] = "Stop Processing"
+
         # Instruct the parser to process an existing log file
         self.parser.process_existing_log(file_path)
         # Update the UI with results
-        self.ui.display_results(self.parser.get_results())
+        #self.ui.display_results(self.parser.get_results())
 
-    def start_log_monitor(self, file_path):
-        # Start monitoring a log file for new lines
+    def start_log_monitor(self, file_path, callback):
+        '''Start monitoring the log file for new entries.  When a new entry is found, issue a callback to the UI to update the UI with the new data'''
+    
+        # Check if the file path is valid
+        if not self.parser.is_valid_file_path(file_path, callback):
+            # If the file path is not valid, issue a callback to the UI to display an error
+            callback(4) #Invalid Log File Path
+            return
         self.parser.start_monitoring(file_path)
+        # issue callback to update UI
+        callback(-1)
 
-    def stop_log_monitor(self):
+    def stop_log_monitor(self, callback):
         # Stop monitoring the log file
         self.parser.stop_monitoring()
-
+        # issue callback to update UI
+        callback(-1)
+        
     def on_new_log_entry(self, log_entry):
         # Handle new log entry event from the parser
         pass # Update the UI with new data
@@ -47,5 +71,12 @@ class LogMonitorController:
     ]
             self.parser.run_test_data(sample_log_lines, self.parser.PATTERNS)     
 
+    def run(self):
+        print("Running Log Monitor Controller")
+        self.mainloop()
+
 if __name__ == "__main__":
-    controller = LogMonitorController()
+    print("Log Monitor Controller  Running as __Main__")
+    parser = Parser()
+    ui = LogMonitorUI()
+    controller = LogMonitorController(parser, ui)

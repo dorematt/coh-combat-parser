@@ -17,7 +17,7 @@ class LogMonitor:
         self.line_generator = None
         self.log_queue = Queue()
         self.log_thread = None
-        self.start_time = 0  # Variable to store the start tim
+        self.start_time = 0  # Variable to store the start time
         self.hits = 0
         self.misses = 0
         

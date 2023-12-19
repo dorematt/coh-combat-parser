@@ -1,4 +1,6 @@
 import re
+import os
+import time
 from datetime import datetime
 import random
 
@@ -8,8 +10,14 @@ class Parser:
         "player_hit_roll": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
+        "player_pet_hit_roll": re.compile(
+            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^.]+):? (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
+        ),
         "player_damage": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
+        ),
+        "player_pet_damage": re.compile(
+            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^.]+):? (?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
         ),
        # "foe_hit_roll": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
@@ -36,25 +44,19 @@ class Parser:
        # "endurance_recovery": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<restorer>.+?) (?:restores|restore) (?:your|PLAYER_NAME's) endurance by (?P<endurance_value>[\d.]+) points\.*"
        # ),
+        "player_name": re.compile( # Matches a welcome message that includes the player name
+        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
+        ),
     }
+    LOG_FILE_PATH = ""
+    PLAYER_NAME = ""
+    COMBAT_SESSION_TIMEOUT = 30 # Seconds,  If no events are found within this time, the combat session will be closed
+    monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
 
-    def __init__(self, player_name):
+    def __init__(self, LOG_FILE_PATH = ""):
 
-        self.line_counter = 0
-
-        #Assign the player name to the class
-        self.PLAYER_NAME = player_name
-        print("Player Name Set: ", self.PLAYER_NAME)
-        self.PATTERNS = self.update_regex_player_name(player_name)
-
-        # Set Exp and Influence values
-        self.EXP_VALUE = 0
-        self.INF_VALUE = 0
-        
-        # create a key-value list of abilities
-        self.Abilities = {}
-        self.START_TIME = 0 # Stores the timestamp of the first event as an int
-        self.current_time = 0 # Stores the latest timestamp as an int
+        print('     Parser Initialize...')
+        self.clean_variables()
     
     def update_regex_player_name(self, player_name):
         updated_patterns = {}
@@ -84,49 +86,67 @@ class Parser:
 
         if event == "player_hit_roll":
             self.handle_event_player_hit_roll(data)
+        elif event == "player_pet_hit_roll":
+            self.handle_event_player_hit_roll(data, True) # Set pet flag to true
         elif event == "player_damage":
             self.handle_event_player_damage(data)
+        elif event == "player_pet_damage":
+            self.handle_event_player_damage(data, True) # Set the pet flag to true
         elif event == "reward_gain_both" or event == "reward_gain_exp" or event == "reward_gain_inf":
-
             if data.get("exp_value") is None:
                 data["exp_value"] = ""
             if data.get("inf_value") is None: 
                 data["inf_value"] = ""
             self.handle_event_reward_gain(data)
 
+        elif event == "player_name": # Usually, a new log file should have been pre-processed to find the player name, this event will match should the player swap chars whilst the log is running
+            self.set_player_name(data["player_name"])
+            self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
 
-    def handle_event_player_damage(self, data):
+
+    def handle_event_player_damage(self, data, pet=False):
         '''Handles a player damage event'''
         # First, ignore any matches that is the player hitting themselves
         if data["target"] == self.PLAYER_NAME:
             # print('Player hit themselves, with ', data["ability"] , '. Ignoring')
             return
-        
-        # Check for ability in directory, if it doesn't exist, create it
-        if data["ability"] not in self.Abilities:
-            self.Abilities[data["ability"]] = Ability(data["ability"])
+         
+        '''Next, check for the ability in the directory. If it doesn't exist, create it, otherwise, add the damage to the ability.
+        If we've gotten the damage event but no hit roll previous to it, then we assume the ability is a proc'''
+
+        if pet:
+            search_ability = data["pet_name"] + ": " + data["ability"]
+        else:
+            search_ability = data["ability"]
+
+        if search_ability not in self.Abilities:
+            self.Abilities[search_ability] = Ability(search_ability, None, True)
             #self.Abilities[data["ability"]].ability_used(True)
             #print('Ability Created: ', self.Abilities[data["ability"]].name)
 
-        active_ability = self.Abilities[data["ability"]]
+        active_ability = self.Abilities[search_ability]
         active_ability.add_damage(DamageComponent(data["damage_type"], data["damage_value"]))
         #print('Ability Executed:', active_ability.name)
 
-    def handle_event_player_hit_roll(self, data):
+    def handle_event_player_hit_roll(self, data, pet=False):
         '''Handles a player hit roll event'''
         # First, ignore any matches that is the player hitting themselves
         if data["target"] == self.PLAYER_NAME:
             print('Player hit themselves, with ', data["ability"] , '. Ignoring')
             return
         
-        # Check for ability in directory, if it doesn't exist, create it
-        if data["ability"] not in self.Abilities:
-            self.Abilities[data["ability"]] = Ability(data["ability"])
-            #self.Abilities[data["ability"]].ability_used(True)
-            #print('Ability Created: ', self.Abilities[data["ability"]].name)
+        if pet:
+            search_ability = data["pet_name"] + ": " + data["ability"]
+        else:
+            search_ability = data["ability"]
 
-        active_ability = self.Abilities[data["ability"]]
+        # Check for ability in directory, if it doesn't exist, create it.
+        if search_ability not in self.Abilities:
+            self.Abilities[search_ability] = Ability(search_ability)
+
+        active_ability = self.Abilities[search_ability]
         active_ability.ability_used(data["outcome"] == "HIT")
+
         #print('Ability Executed:', active_ability.name)
 
     def handle_event_reward_gain(self, data):
@@ -141,7 +161,6 @@ class Parser:
 
         self.add_inf(inf_value)
         self.add_exp(exp_value)
-
 
     def convert_timestamp(self, date, time):
         '''Converts a timestamp from the log file into a datetime object and returns an int representing the time in seconds'''
@@ -188,14 +207,180 @@ class Parser:
             print(extracted_data)
         return extracted_data
 
+    def set_log_file(self, file_path):
+        '''takes the file path and sets the log file to the file path'''
+        self.LOG_FILE_PATH = file_path
+        print('          Log File Path Set: ', self.LOG_FILE_PATH)
+    def has_log_file(self):
+        '''Checks if the log file path is set'''
+        return self.LOG_FILE_PATH != ""
+    def is_valid_file_path(self, file_path):
+        '''CHeck if the given file path is valid'''
+        # Check if the file path is valid
+        file_path = file_path.strip()
+        if not os.path.isfile(file_path):
+            print('     Invalid File Path: ', file_path)
+            return False
+        return True
+    def find_player_name(self):
+        '''Reads the log file from bottom to top, to find the player name'''
+        # Check if the log file path is set
+        if self.LOG_FILE_PATH == "":
+            print('          Log File Path not set')
+        
+        # Open the log file then read each line from bottom up to match the last player_name pattern
+        with open(self.LOG_FILE_PATH, 'r') as file:
+            for line in reversed(list(file)):
+                event, data = self.check_line_extract_event(line)
+                if event == "player_name":
+                    return data["player_name"]
+        print('          Unable to find Player Name in log')
+        return ""
 
+    def set_player_name(self, player_name):
+        '''Sets the player name'''
+        self.PLAYER_NAME = player_name
+        print('          Player Name Updated to: ', self.PLAYER_NAME)
+        self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
+    
+    def process_existing_log(self, file_path):
+        '''Analyses a log file that has already been created. Function will terminate once the bottom of the file is reached'''
+
+        # Check if the file path is valid
+        if not self.is_valid_file_path(file_path):
+            return False
+        self.set_log_file(file_path)
+    
+        self.clean_variables()
+
+        print('          Processing Log File: ', self.LOG_FILE_PATH)
+
+        self.set_player_name(self.find_player_name())
+        
+        #Open file and iterate through each line
+        with open(self.LOG_FILE_PATH, 'r') as file:
+            for line in file:
+                event, data = self.check_line_extract_event(line)
+                self.line_count += 1
+                if event is not "":
+                    print(event, data)
+                    self.interpret_event(event, data)
+        _test_show_results()
+
+        return True
+    
+    def process_live_log(self, file_path):
+        '''Opens the file path and monitors the file for new entries until terminated. 
+        This will not process any existing entries in the log file'''
+
+        # Check if the file path is valid
+        if not self.is_valid_file_path(file_path):
+            return False
+        self.set_log_file(file_path)
+
+        self.clean_variables()
+
+
+        print('          Monitoring Log File: ', self.LOG_FILE_PATH)
+        self.monitoring_live = True
+
+        # locate and assign player name
+        self.set_player_name(self.find_player_name())
+
+        # Begin monitoring the log file
+        with open(self.LOG_FILE_PATH, 'r') as file:
+            while self.monitoring_live:
+                line = file.readline()
+                if not line:
+                    time.sleep(0.01)
+                    continue
+                event, data = self.check_line_extract_event(line)
+                self.line_count += 1
+                if event is not "":
+                    print(event, data)
+                    self.interpret_event(event, data)
+
+
+    def handle_commands(self, command):
+        '''When run in CLI mode, this function will handle the commands entered by the user'''
+        if command.lower == "t":
+            self.process_existing_log('path_to_test_file.txt')
+        elif command == "live":
+            #TODO Implement live monitoring logic here
+            print("Live monitoring is not implemented yet.")
+        elif command.lower() in ["analyze", "a", "analyse"]:
+            _, file_path = command.split(" ", 1)
+            self.process_existing_log(file_path)
+        else:
+            print("Unknown command. Please enter a valid command.")
+            
+    def clean_variables(self):
+        '''Reset all'''
+        self.line_count = 0
+        self.combat_session = [] # Stores a list of combat sessions
+        self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
+
+        # Set Exp and Influence values
+        self.EXP_VALUE = 0
+        self.INF_VALUE = 0
+        
+        # create a key-value list of abilities
+        self.Chars = {} # Stores a list of characters
+        self.Abilities = {} # Stores a list of abilities
+        self.START_TIME = 0 # Stores the timestamp of the first event as an int
+        self.current_time = 0 # Stores the latest timestamp as an int
+        
+class CombatSession:
+    '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
+    CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.''' 
+    def __init__(self):
+        self.start_time = 0
+        self.end_time = 0
+        self.duration = 0 # Seconds
+        self.abilities = {}
+        self.exp = 0
+        self.inf = 0
+        self.damage_taken = 0
+        self.damage_dealt = 0
+        self.healing = 0
+        self.abilities_used = 0
+        self.abilities_hit = 0
+        self.abilities_missed = 0
+        self.abilities_accuracy = 0
+        self.abilities_dps = 0
+        self.abilities_average_damage = 0
+        self.abilities_total_damage = 0
+        self.abilities_damage_per_hit = 0
+        self.abilities_damage_per_second = 0
+    
+    def set_start_time(self, start_time):
+        self.start_time = start_time
+    def set_end_time(self, end_time):
+        self.end_time = end_time
+    def update_duration(self):
+        self.duration = self.end_time - self.start_time
+    def get_duration(self):
+        return self.duration
+
+class Character:
+    '''Stores data about a character, this can be the Player, pets or enemies'''
+    def __init__(self, name="") -> None:
+        self.name = ""
+        self.abilities = {}
+
+    def add_ability(self, ability):
+        '''Adds an ability to the character'''
+        self.abilities[ability.name] = ability
 class Ability:
     '''Stores data about an ability used'''
-    def __init__(self, name, hit=None):
+    def __init__(self, name, hit=None, proc=False):
         self.name = name
         self.count = 0 if hit is None else 1
         self.hits = 1 if hit is True else 0
-        self.damage = [] 
+        self.damage = []
+        self.proc = proc
+        self.pet = False
+        self.pet_name = "" # If ability came from a pet, store the pet name
 
     def add_damage(self, damage_component):
         '''Adds a damage component to the ability'''
@@ -206,6 +391,9 @@ class Ability:
                 return
         self.damage.append(damage_component)
         self.damage[-1].add_damage(damage_component.type, damage_component.total_damage)
+
+        if self.proc: # If the ability is a proc, we'll need to incremement the ability hit count as there will be no hitroll for this ability.
+            self.ability_used(True)
         #print('Added new Damage Component: ', damage_component.type, 'to Ability: ', self.name)
     
     def ability_used(self, hit):
@@ -239,6 +427,10 @@ class Ability:
         if self.hits == 0 or self.count == 0:
             return 0
         return round((self.hits / self.count) * 100,2)
+    
+    def get_count(self):
+        '''Returns the number of times the ability has been used'''
+        return self.count
     
     def get_dps(self, duration):
         '''Calculates the DPS for the ability based off of the damage components'''
@@ -346,7 +538,7 @@ def _test_damage_lines():
         for line in sample_damage_lines:
             event, data = self.check_line_extract_event(line)
             #self.line_counter += 1
-            if event is not "":
+            if event != "":
                 print(event, data)
                 self.interpret_event(event, data)
 
@@ -378,7 +570,7 @@ def _test_log_file():
     with open('C:\\Users\\mdore\\OneDrive\\02_Documents\\02_SCRIPTS\\CoH_Log_Parser\\coh_logfile_snippet.txt', 'r') as file:
         for line in file:
             event, data = self.check_line_extract_event(line)
-            self.line_counter += 1
+            self.line_count += 1
             if event is not "":
                 print(event, data)
                 self.interpret_event(event, data)
@@ -389,12 +581,12 @@ def _test_show_results():
     print('Total Experience: ', self.get_exp())
     print('Total Influence: ', self.get_inf())
     print("---- ABILITY DATA -----")
-    # loop down the ability dictionary and print the ability name, accuracy % and total damage
+    # loop down the ability dictionary and print the ability name, and '(proc)' if the ability is a proc, accuracy % and total damage
     for ability in self.Abilities:
-        print(self.Abilities[ability].name,
+        print(self.Abilities[ability].name, ' (proc)' if self.Abilities[ability].proc else '',
               '\n    DPS: ', self.Abilities[ability].get_dps(self.get_log_duration()), 'Average Damage: ', self.Abilities[ability].get_average_damage(),
               '\n    Accuracy: ', self.Abilities[ability].get_accuracy(), '% | Count: ', self.Abilities[ability].count, '| Hits: ', self.Abilities[ability].hits, '|')
-              
+        
         
         # loop down the damage components and print the damage type, total damage and count
         for component in self.Abilities[ability].damage:
@@ -405,24 +597,30 @@ def _test_show_results():
     print('')
     for ability in self.Abilities:
         total_damage += self.Abilities[ability].get_total_damage()
-    print('Total Damage: ', total_damage)
+    print('Total Damage: ', round(total_damage,2))
     print('Total Duration of the log: ', self.get_log_duration(), 'seconds')
     print('Total Damage Per Second: ', self.get_dps(self.get_log_duration()))
-    print('Lines processed: ', self.line_counter)
+    print('Lines processed: ', self.line_count)
+
 
 if __name__ == "__main__":
     # if this is being run directly, run the test data
     print("Parser has been directly called as __main__, running test data")
 
-    PLAYER_NAME = "Emet Selch"
-    self = Parser(PLAYER_NAME)
+    #PLAYER_NAME = "Emet Selch"
+    self = Parser()
     
-    self.line_counter = 0
+    self.line_count = 0
 
     #Initiate tests
     #_test_hit_rolls()
     #_test_damage_lines()
     #_test_reward_lines()
-    _test_log_file()
-                
+    test_file = "H:\\Games\\Homecoming_COH\\accounts\\10kVolts\\Logs\\chatlog 2023-12-18.txt"
+    self.process_existing_log(test_file)
     _test_show_results()
+
+    while True:
+        user_command = input("Enter a command (e.g., 'run_test_file', 'live_monitor', 'analyze_log_file <path_to_log_file>'): ")
+        self.handle_commands(user_command)
+                

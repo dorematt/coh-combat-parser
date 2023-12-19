@@ -3,54 +3,108 @@ from tkinter import filedialog, ttk
 from typing import Callable
 
 class LogMonitorUI(tk.Tk):
-    # Create the main application window
-    root = tk.Tk()
-    root.title("Combat Log Parser")
 
-    # Configure the grid
-    root.grid_rowconfigure(1, weight=1)
-    root.grid_columnconfigure(1, weight=1)
+    def __init__(self, *args, **kwargs):
+        # Initialization code here
+        print("     Initializing UI...")
+        super().__init__(*args, **kwargs)  # Call the superclass constructor
+        self.title("Combat Log Parser")
 
-    # Add UI components
-    file_path_var = tk.StringVar(root)
-    overall_dps_var = tk.StringVar(root)
+        # Initialize UI Variables
+        self.file_path_var = tk.StringVar(self)
+        self.overall_dps_var = tk.StringVar(self)
+
+        # Configure the grid
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        # Configure the grid
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+        # File path input label and entry
+        self.file_path_label = tk.Label(self, text="Log File Path:")
+        self.file_path_entry = tk.Entry(self, textvariable=self.file_path_var, width=50)
+        self.browse_button = tk.Button(self, text="Browse", command=self.browse_file)
+
+        # Start/Stop and Process buttons
+        self.start_stop_button = tk.Button(self, text="Start/Stop Log", command=self.start_stop_log)
+        self.process_button = tk.Button(self, text="Process Existing Log")
+
+        # Run Test button to add test data to the Treeview
+        self.run_test_button = tk.Button(self, text="Run Test", command=self.add_ability)
 
 
+        # DPS label and variable display
+        self.overall_dps_label = tk.Label(self, text="DPS:")
+        self.overall_dps_display = tk.Label(self, textvariable=self.overall_dps_var)
+
+        # Create a treeview to display all abilities and their DPS
+        columns = ("Ability Name", "DPS", "Number of Hits", "Accuracy %", "Avg Damage per Hit", "Total Damage")
+        self.ability_tree_display = ttk.Treeview(self, columns=columns, show="headings")
+        for col in columns:
+            self.ability_tree_display.heading(col, text=col)
+            self.ability_tree_display.column(col, anchor=tk.CENTER)
+
+        # Add vertical scrollbar
+        self.scrollbar = tk.Scrollbar(self, orient="vertical", command=self.ability_tree_display.yview)
+        self.ability_tree_display.configure(yscrollcommand=self.scrollbar.set)
+
+        # Pack Treeview and Scrollbar
+        self.ability_tree_display.grid(row=2, column=0, columnspan=3, padx=10, pady=10, sticky='nsew')
+        self.scrollbar.grid(row=2, column=3, sticky='ns')
+
+
+        # Place the components on the grid
+        self.file_path_label.grid(row=0, column=0, padx=10, pady=10)
+        self.file_path_entry.grid(row=0, column=1, padx=10, pady=10, sticky='ew')
+        self.browse_button.grid(row=0, column=2, padx=10, pady=10)
+
+        self.start_stop_button.grid(row=1, column=0, padx=10, pady=10)
+        self.process_button.grid(row=1, column=1, padx=10, pady=10)
+
+        print("Done.")
+
+    def exit(self):
+        # Stop the UI
+        self.destroy()
+    
     # Function to browse and select a file
-    def browse_file():
+    def browse_file(self):
         file_path = filedialog.askopenfilename()
-        file_path_var.set(file_path)
+        self.file_path_var.set(file_path) 
 
     # Function to handle "Start/Stop Log" button click
-    def start_stop_log():
+    def start_stop_log(self):
         # If the button says "Start Log", start the log
-        if start_stop_button['text'] == "Start Log":
-            start_stop_button['text'] = "Stop Log"
-            process_button['state'] = tk.DISABLED
-            file_path_entry['state'] = tk.DISABLED
-            browse_button['state'] = tk.DISABLED
-            LogMonitorController.start_log_monitor(file_path_var.get())
+        if self.start_stop_button['text'] == "Start Log":
+            self.LogMonitorController.start_log_monitor(self.file_path_var.get(), self.on_new_log_entry)
+            self.start_stop_button['text'] = "Stop Log"
+            self.process_button['state'] = tk.DISABLED
+            self.file_path_entry['state'] = tk.DISABLED
+            self.browse_button['state'] = tk.DISABLED
+            
         # If the button says "Stop Log", stop the log
-        elif start_stop_button['text'] == "Stop Log":
-            start_stop_button['text'] = "Start Log"
-            process_button['state'] = tk.NORMAL
-            file_path_entry['state'] = tk.NORMAL
-            browse_button['state'] = tk.NORMAL
-            LogMonitorController.stop_log_monitor()
+        elif self.start_stop_button['text'] == "Stop Log":
+            self.start_stop_button['text'] = "Start Log"
+            self.process_button['state'] = tk.NORMAL
+            self.file_path_entry['state'] = tk.NORMAL
+            self.browse_button['state'] = tk.NORMAL
+            self.LogMonitorController.stop_log_monitor()
 
     # Function to handle "Process Existing Log" button click
-    def process_existing_log():
+    def process_existing_log(self, callback):
         # If the button says "Process Existing Log", process the log
-        if process_button['text'] == "Process Existing Log":
-            process_button['text'] = "Stop Processing"
-            start_stop_button['state'] = tk.DISABLED
-            file_path_entry['state'] = tk.DISABLED
-            browse_button['state'] = tk.DISABLED
-            LogMonitorController.process_existing_log(file_path_var.get())
+        if self.process_button['text'] == "Process Existing Log":
+            self.process_button['text'] = "Stop Processing"
+            self.start_stop_button['state'] = tk.DISABLED
+            self.file_path_entry['state'] = tk.DISABLED
+            self.browse_button['state'] = tk.DISABLED
+            self.callback(self.file_path_var.get())
 
-    def run_test_log():
+    def run_test_log(self):
+        pass
         # Call the run_test_data method in the LogMonitorController
-        LogMonitorController.run_test_data()
+        self.LogMonitorController.run_test_data(self)
 
 
     def add_ability(self):
@@ -59,48 +113,3 @@ class LogMonitorUI(tk.Tk):
 
         # Insert data into the Treeview
         self.tree.insert("", "end", values=ability_data)
-
-    # File path input label and entry
-    file_path_label = tk.Label(root, text="Log File Path:")
-    file_path_entry = tk.Entry(root, textvariable=file_path_var, width=50)
-    browse_button = tk.Button(root, text="Browse", command=browse_file)
-
-    # Start/Stop and Process buttons
-    start_stop_button = tk.Button(root, text="Start/Stop Log", command=start_stop_log)
-    process_button = tk.Button(root, text="Process Existing Log", command=process_existing_log)
-
-    # Run Test button to add test data to the Treeview
-    run_test_button = tk.Button(root, text="Run Test", command=add_ability)
-
-
-    # DPS label and variable display
-    overall_dps_label = tk.Label(root, text="DPS:")
-    overall_dps_display = tk.Label(root, textvariable=overall_dps_var)
-
-    # Create a treeview to display all abilities and their DPS
-    columns = ("Ability Name", "DPS", "Number of Hits", "Accuracy %", "Avg Damage per Hit", "Total Damage")
-    ability_tree_display = ttk.Treeview(root, columns=columns, show="headings")
-    for col in columns:
-        ability_tree_display.heading(col, text=col)
-        ability_tree_display.column(col, anchor=tk.CENTER)
-
-    # Add vertical scrollbar
-    scrollbar = tk.Scrollbar(root, orient="vertical", command=ability_tree_display.yview)
-    ability_tree_display.configure(yscrollcommand=scrollbar.set)
-
-    # Pack Treeview and Scrollbar
-    ability_tree_display.grid(row=2, column=0, columnspan=3, padx=10, pady=10, sticky='nsew')
-    scrollbar.grid(row=2, column=3, sticky='ns')
-
-
-    # Place the components on the grid
-    file_path_label.grid(row=0, column=0, padx=10, pady=10)
-    file_path_entry.grid(row=0, column=1, padx=10, pady=10, sticky='ew')
-    browse_button.grid(row=0, column=2, padx=10, pady=10)
-
-    start_stop_button.grid(row=1, column=0, padx=10, pady=10)
-    process_button.grid(row=1, column=1, padx=10, pady=10)
-
-
-    # Run the main application loop
-    root.mainloop()
