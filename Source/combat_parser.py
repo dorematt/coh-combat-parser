@@ -101,6 +101,7 @@ class Parser:
         '''Ends the current combat session'''
         self.session[-1].update_duration()
         self.combat_session_live = False
+        self.add_global_combat_duration(self.session[-1].get_duration())
         print ("     Ended Combat Session: ", self.session_count, " With a duration of ", self.session[-1].get_duration(), " seconds")
 
     def update_session_time(self, timestamp):
@@ -216,7 +217,9 @@ class Parser:
         if self.GOBAL_START_TIME == 0:
             self.GOBAL_START_TIME = timestamp
         self.GLOBAL_CURRENT_TIME = timestamp
-    
+    def add_global_combat_duration(self, duration): 
+        self.global_combat_duration += duration
+        return self.global_combat_duration
     def get_log_duration(self):
         '''Calculates the duration of the log file'''
         return self.GLOBAL_CURRENT_TIME - self.GOBAL_START_TIME
@@ -286,7 +289,7 @@ class Parser:
     
     def process_existing_log(self, file_path):
         '''Analyses a log file that has already been created. Function will terminate once the bottom of the file is reached'''
-
+        
         # Check if the file path is valid
         if not self.is_valid_file_path(file_path):
             return False
@@ -295,7 +298,7 @@ class Parser:
         self.clean_variables()
 
         print('          Processing Log File: ', self.LOG_FILE_PATH)
-
+        _log_process_start_ = time.time()
         #self.set_player_name(self.find_player_name())
         
         #Open file and iterate through each line
@@ -307,7 +310,7 @@ class Parser:
                     print(event, data)
                     self.interpret_event(event, data)
         _test_show_results()
-
+        print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
         return True
     
     def process_live_log(self, file_path):
@@ -361,6 +364,7 @@ class Parser:
         self.session = [] # Stores a list of combat sessions
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
         self.combat_session_live = False # Flag to indicate if a combat session is active
+        self.global_combat_duration = 0 # Stores the total durations of all combat sessions
 
         # Set Exp and Influence values
         self.EXP_VALUE = 0
@@ -610,15 +614,20 @@ def _test_log_file():
                 self.interpret_event(event, data)
 
 def _test_show_results():
+    def format_duration(seconds):
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f'{int(hours)} hours, {int(minutes)} minutes, {int(seconds)} seconds'
+    
     print('\n','\n',"---- SUMMARY -----")
     print('Player Name: ', self.PLAYER_NAME)
-    print('Total Experience: ', self.get_exp())
-    print('Total Influence: ', self.get_inf())
+    print(f'Total Experience: {self.get_exp():,}')
+    print(f'Total Influence: {self.get_inf():,}')
     print("---- ABILITY DATA -----")
     # loop down the ability dictionary and print the ability name, and '(proc)' if the ability is a proc, accuracy % and total damage
     for ability in self.Abilities:
         print(self.Abilities[ability].name, ' (proc)' if self.Abilities[ability].proc else '',
-              '\n    DPS: ', self.Abilities[ability].get_dps(self.get_log_duration()), 'Average Damage: ', self.Abilities[ability].get_average_damage(),
+              '\n    DPS: ', self.Abilities[ability].get_dps(self.global_combat_duration), 'Average Damage: ', self.Abilities[ability].get_average_damage(),
               '\n    Accuracy: ', self.Abilities[ability].get_accuracy(), '% | Count: ', self.Abilities[ability].count, '| Hits: ', self.Abilities[ability].hits, '|')
         
         
@@ -632,8 +641,10 @@ def _test_show_results():
     for ability in self.Abilities:
         total_damage += self.Abilities[ability].get_total_damage()
     print('Total Damage: ', round(total_damage,2))
-    print('Total Duration of the log: ', self.get_log_duration(), 'seconds')
-    print('Total Damage Per Second: ', self.get_dps(self.get_log_duration()))
+    print('Total Duration of the log:', format_duration(self.get_log_duration()))
+    print('Total Combat Duration:', format_duration(self.global_combat_duration))
+    print('Total Combat Sessions: ', self.session_count)
+    print('Total Damage Per Second: ', self.get_dps(self.global_combat_duration))
     print('Lines processed: ', self.line_count)
 
 def _test_combat_sessions():
@@ -654,7 +665,7 @@ if __name__ == "__main__":
     #_test_reward_lines()
     test_file = "H:\\Games\\Homecoming_COH\\accounts\\10kVolts\\Logs\\chatlog 2023-12-18.txt"
     self.process_existing_log(test_file)
-    _test_show_results()
+
 
     while True:
         user_command = input("Enter a command (e.g., 'run_test_file', 'live_monitor', 'analyze_log_file <path_to_log_file>'): ")
