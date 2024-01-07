@@ -3,6 +3,10 @@ import os
 import time
 from datetime import datetime
 import random
+import tkinter as tk
+from tkinter import filedialog
+import sys
+
 
 
 class Parser:
@@ -361,10 +365,11 @@ class Parser:
             print('          Log File Path not set')
         
         # Open the log file then read each line from bottom up to match the last player_name pattern
-        with open(self.LOG_FILE_PATH, 'r') as file:
+        with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             for line in reversed(list(file)):
                 event, data = self.extract_from_line(line)
                 if event == "player_name":
+                    print ('          Player Name Located: ', data["player_name"])
                     return data["player_name"]
         print('          Unable to find Player Name in log')
         return ""
@@ -394,7 +399,7 @@ class Parser:
             for line in file:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
-                if event is not "":
+                if event != "":
                     if self.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
         _test_show_results()
@@ -412,15 +417,17 @@ class Parser:
 
         self.clean_variables()
 
-
         print('          Monitoring Log File: ', self.LOG_FILE_PATH)
         self.monitoring_live = True
 
         # locate and assign player name
         self.set_player_name(self.find_player_name())
 
-        # Begin monitoring the log file
-        with open(self.LOG_FILE_PATH, 'r') as file:
+        # Open the log file in append mode
+        with open(self.LOG_FILE_PATH, 'a+') as file:
+            file.seek(0, 2)  # Move the file pointer to the end of the file
+
+            # Begin monitoring the log file
             while self.monitoring_live:
                 line = file.readline()
                 if not line:
@@ -428,23 +435,11 @@ class Parser:
                     continue
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
-                if event is not "":
-                    print(event, data)
+                if event != "":
+                    if self.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
 
-
-    def handle_commands(self, command):
-        '''When run in CLI mode, this function will handle the commands entered by the user'''
-        if command.lower == "t":
-            self.process_existing_log('path_to_test_file.txt')
-        elif command == "live":
-            #TODO Implement live monitoring logic here
-            print("Live monitoring is not implemented yet.")
-        elif command.lower() in ["analyze", "a", "analyse"]:
-            _, file_path = command.split(" ", 1)
-            self.process_existing_log(file_path)
-        else:
-            print("Unknown command. Please enter a valid command.")      
+  
     def clean_variables(self):
         '''Reset all'''
         self.line_count = 0
@@ -746,10 +741,9 @@ def _test_hit_rolls():
         for line in sample_hit_lines:
             event, data = self.extract_from_line(line)
             #self.line_counter += 1
-            if event is not "":
+            if event != "":
                 print(event, data)
                 self.interpret_event(event, data)
-
 def _test_damage_lines():
         sample_damage_lines = [
         "2023-11-18 14:50:23 You hit Lattice with your Black Dwarf Smite for 211.94 points of Smashing damage.",
@@ -783,7 +777,6 @@ def _test_damage_lines():
             if event != "":
                 print(event, data)
                 self.interpret_event(event, data)
-
 def _test_reward_lines():
     sample_reward_lines = [
     '2023-11-18 14:48:05 You gain 1,525 experience and 763 influence.',
@@ -802,10 +795,9 @@ def _test_reward_lines():
     for line in sample_reward_lines:
         event, data = self.extract_from_line(line)
         #self.line_counter += 1
-        if event is not "":
+        if event != "":
             print(event, data)
             self.interpret_event(event, data)
-
 def _test_log_file():
     print('\n \n', "---- STARTING LOG FILE DATA TEST -----", '\n \n')
 #Open text file with test data, similarly test extraction data
@@ -813,7 +805,7 @@ def _test_log_file():
         for line in file:
             event, data = self.extract_from_line(line)
             self.line_count += 1
-            if event is not "":
+            if event != "":
                 print(event, data)
                 self.interpret_event(event, data)
 
@@ -856,6 +848,33 @@ def _test_show_results():
 def _test_combat_sessions():
     pass
 
+def open_file():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename()
+    return file_path
+
+def handle_commands(self, command):
+    '''When run in CLI mode, text commands entered will be processed'''
+    if command.lower == "t":
+        self.process_existing_log('path_to_test_file.txt')
+
+    elif command.lower() in  ["live", "l"]:
+        file_path = open_file()
+        if file_path != "":
+            self.process_live_log(file_path)
+        # print("Live monitoring is not implemented yet.")
+            
+    elif command.lower() in ["analyze", "a", "analyse"]:
+        file_path = open_file()
+        if file_path != "":
+            self.process_existing_log(file_path)
+    
+    elif command.lower() in ["exit", "quit", "q"]:
+        print("Exiting...")
+        sys.exit()
+    else:
+        print("Unknown command. Please enter a valid command.")    
 if __name__ == "__main__":
     # if this is being run directly, run the test data
     print("Parser has been directly called as __main__, running test data")
@@ -869,11 +888,11 @@ if __name__ == "__main__":
     #_test_hit_rolls()
     #_test_damage_lines()
     #_test_reward_lines()
-    test_file = "H:\\Games\\Homecoming_COH\\accounts\\10kVolts\\Logs\\chatlog 2023-12-18.txt"
-    self.process_existing_log(test_file)
+    #test_file = open_file()
+    #self.process_existing_log(test_file)
 
 
     while True:
         user_command = input("Enter a command (e.g., 'run_test_file', 'live_monitor', 'analyze_log_file <path_to_log_file>'): ")
-        self.handle_commands(user_command)
+        handle_commands(self, user_command)
                 
