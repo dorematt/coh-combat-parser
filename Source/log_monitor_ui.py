@@ -1,8 +1,11 @@
 import tkinter as tk
 from tkinter import filedialog, ttk
 from typing import Callable
+from combat_parser import CombatSession
 
 class LogMonitorUI(tk.Tk):
+    monitoring_live = False
+
 
     def __init__(self, *args, **kwargs):
         # Initialization code here
@@ -39,28 +42,35 @@ class LogMonitorUI(tk.Tk):
         self.overall_dps_display = tk.Label(self, textvariable=self.overall_dps_var)
 
         # Create a treeview to display all abilities and their DPS
+  
         columns = ("Ability Name", "DPS", "Number of Hits", "Accuracy %", "Avg Damage per Hit", "Total Damage")
         self.ability_tree_display = ttk.Treeview(self, columns=columns, show="headings")
         for col in columns:
             self.ability_tree_display.heading(col, text=col)
             self.ability_tree_display.column(col, anchor=tk.CENTER)
 
+        # Combat Session Tree
+            columns = ("Combat Session")
+        self.combat_session_tree = ttk.Treeview(self, columns=columns)
+        
+
         # Add vertical scrollbar
         self.scrollbar = tk.Scrollbar(self, orient="vertical", command=self.ability_tree_display.yview)
         self.ability_tree_display.configure(yscrollcommand=self.scrollbar.set)
 
-        # Pack Treeview and Scrollbar
-        self.ability_tree_display.grid(row=2, column=0, columnspan=3, padx=10, pady=10, sticky='nsew')
-        self.scrollbar.grid(row=2, column=3, sticky='ns')
 
 
-        # Place the components on the grid
-        self.file_path_label.grid(row=0, column=0, padx=10, pady=10)
-        self.file_path_entry.grid(row=0, column=1, padx=10, pady=10, sticky='ew')
+        # UI PLACEMENT ONTO GRID
+        self.file_path_label.grid(row=0, column=0, padx=5, pady=5, sticky='ew')
+        self.file_path_entry.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
         self.browse_button.grid(row=0, column=2, padx=10, pady=10)
 
         self.start_stop_button.grid(row=1, column=0, padx=10, pady=10)
         self.process_button.grid(row=1, column=1, padx=10, pady=10)
+
+        self.combat_session_tree.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+        self.ability_tree_display.grid(row=2, column=2, columnspan=4, padx=10, pady=10, sticky='nsew')
+        self.scrollbar.grid(row=2, column=7, sticky='ns')
 
         print("Done.")
 
@@ -112,4 +122,16 @@ class LogMonitorUI(tk.Tk):
         ability_data = ("New Ability", 150, 10, 90, 15, 1500)
 
         # Insert data into the Treeview
-        self.tree.insert("", "end", values=ability_data)
+        self.ability_tree_display.insert("", "end", values=ability_data)
+    
+    def update_ui_combat_session(self, combat_session : CombatSession):
+        '''Updates the tree with the latest combat session data, expects a CombatSession object as input'''''
+        pass
+
+if __name__ == "__main__":
+    # Create the UI
+    ui = LogMonitorUI()
+
+    # Run the UI
+    ui.add_ability()
+    ui.mainloop()
