@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog
 import sys
 
-
+CONSOLE_VERBOSITY = 1
 
 class Parser:
     '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
@@ -56,11 +56,17 @@ class Parser:
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
         ),
     }
+    PATTERN_DATETIME = {
+        "date_time": re.compile(
+        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2})"
+        )
+    }
+
     LOG_FILE_PATH = ""
     PLAYER_NAME = ""
-    COMBAT_SESSION_TIMEOUT = 30 # Seconds, determines how long to wait between 
-    CONSOLE_VERBOSITY = 1 # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
+    COMBAT_SESSION_TIMEOUT = 15 # Seconds, determines how long to wait between  # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
+
     def __init__(self, LOG_FILE_PATH = ""):
 
         print('     Parser Initialize...')
@@ -71,7 +77,7 @@ class Parser:
         for key, regex in self.PATTERNS.items():
             updated_pattern = regex.pattern.replace('PLAYER_NAME', player_name)
             updated_regex = re.compile(updated_pattern)
-            if self.CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
+            if CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
             updated_patterns[key] = updated_regex
         return updated_patterns
     
@@ -82,12 +88,18 @@ class Parser:
             if match:
                 return (key, match.groupdict())
         return '',[]
+    def extract_datetime_from_line(self, log_line):
+        for key, regex in self.PATTERN_DATETIME.items():
+            match = regex.match(log_line)
+            if match:
+                return (key, match.groupdict())
+        return '',[]
 
     def new_session(self, timestamp):
         self.session_count += 1
         self.session.append(CombatSession(timestamp))
         self.combat_session_live = True
-        if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Combat Session Started: ", self.session_count, '\n')
+        if CONSOLE_VERBOSITY >= 1: print ("---------->  Combat Session Started: ", self.session_count, '\n')
         return self.session[-1]
     def check_session(self, timestamp):
         '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
@@ -101,18 +113,25 @@ class Parser:
             else:
                 return 1 # Session still active and valid
         return 0 # No active session
-    def end_session(self):
+    def end_current_session(self):
         '''Ends the current combat session'''
         self.session[-1].update_duration()
         self.combat_session_live = False
         self.add_global_combat_duration(self.session[-1].get_duration())
-        if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.session[-1].get_duration(), " seconds \n")
+        if CONSOLE_VERBOSITY >= 1: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.session[-1].get_duration(), " seconds \n")
+    def remove_last_session(self):
+        '''Removes the current combat session'''
+        if CONSOLE_VERBOSITY >= 1: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
+        self.session.pop()
+        self.session_count -= 1
+        self.combat_session_live = False
+        
     def update_session_time(self, timestamp):
         '''Updates the current combat session time'''
         self.session[-1].update_session_time(timestamp)
-    def display_session_results(self, session):
+    def print_session_results(self, session):
         '''Displays the results of the current combat session'''
-        print('\n', '\n')
+        print('\n', '\n') 
         print('Session ', self.session_count, ' SUMMARY | Duration: ', session.get_duration())
         print(' EXP: ', session.get_exp(), ' | INF: ', session.get_inf())
         
@@ -121,30 +140,38 @@ class Parser:
         
         for char in sorted_chars:
             print('---------------------------------')
-            print('  Character: ', char)
-            print('     DPS: ', session.chars[char].get_dps(session.get_duration()), 'sec')
-            print('     Total : ', session.chars[char].get_total_damage(), ' | Avg : ', session.chars[char].get_average_damage())
+            if session.chars[char].is_pet:
+                print('  Char: ', char)
+            else:
+                print('  Pet: ', char)
+            print('     DPS: ', session.chars[char].get_dps(session.get_duration()), ' | Acc: ', session.chars[char].get_accuracy(), '%')
+            print('     Total : ', session.chars[char].get_total_damage(), ' | Avg Hit : ', session.chars[char].get_average_damage())
             print('\n')
             
-            # Sort abilities by DPS
-            sorted_abilities = sorted(session.chars[char].abilities.keys(), key=lambda ability: session.chars[char].abilities[ability].get_dps(session.get_duration()), reverse=True)
-            
-            for ability in sorted_abilities:
-                if session.chars[char].abilities[ability].get_count() == 0:
-                    continue  # Skip zero count abilities
-                _ability = session.chars[char].abilities[ability]
-                print('     ',_ability.name, ' (proc)' if _ability.proc else '',
-                '\n        DPS: ', _ability.get_dps(session.get_duration()), 'Avg: ', _ability.get_average_damage(),
-                '\n        Accuracy: ', _ability.get_accuracy(), '% | Count: ', _ability.count, '| Hits: ', _ability.hits, '|')
+            def print_sorted_abilities(sorted_abilities):
+                for ability in sorted_abilities:
+                    if session.chars[char].abilities[ability].get_count() == 0:
+                        continue  # Skip zero count abilities
+                    _ability = session.chars[char].abilities[ability]
+                    print('     ',_ability.name, ' (proc)' if _ability.proc else '',
+                    '\n        DPS: ', _ability.get_dps(session.get_duration()), 'Avg: ', _ability.get_average_damage(),
+                    '\n        Accuracy: ', _ability.get_accuracy(), '% | Count: ', _ability.count, '| Hits: ', _ability.hits, '|')
 
-                for component in _ability.damage:
-                    print('            Damage Type: ', component.type,'| T:', component.total_damage,'| H:', component.highest_damage, '| L:', component.lowest_damage, '| Count: ', component.count)
-                print('')
-            print('------------------')
+                    for component in _ability.damage:
+                        print('            Damage Type: ', component.type,'| T:', component.total_damage,'| H:', component.highest_damage, '| L:', component.lowest_damage, '| Count: ', component.count)
+                    print('')
+
+            if CONSOLE_VERBOSITY > 1:
+                # Sort abilities by DPS
+                sorted_abilities = sorted(session.chars[char].abilities.keys(), key=lambda ability: session.chars[char].abilities[ability].get_dps(session.get_duration()), reverse=True)
+                print_sorted_abilities(sorted_abilities)
+
+            
         
-        print('------------------')
+        print('---------------------')
         print('\n')
-    
+
+
     def interpret_event(self, event, data):
         '''Interprets the data generated by the extract_from_line function to update the parser data.
         This will handle updating the global time, checking for combat session status and calling the appropriate handler functions'''
@@ -154,32 +181,32 @@ class Parser:
         self.update_global_time(self.convert_timestamp(data["date"], data["time"]))
         status = self.check_session(self.GLOBAL_CURRENT_TIME)
 
-        def update_session_and_time(): # Helper function to update the session and time
-            if status == 0:
-                self.new_session(self.GLOBAL_CURRENT_TIME)
+        def update_session_and_time(in_combat=False): # Helper function to call session updates as well as beginning new sessions
+            if (status == 0 or status == -1) and in_combat:
+                self.new_session(self.GLOBAL_CURRENT_TIME) # We 
             self.session[-1].update_session_time(self.GLOBAL_CURRENT_TIME)
 
-        if status == -1: # -1 indicates that the session has timed out
 
-            # If the session is empty, remove it from the session list
+        if status == -1: # Checking for a timed-out combat session
+
+            # Remove the session if it had no damage
             if self.session[-1].get_total_damage() == 0:
-                self.session.pop()
-                self.session_count -= 1
+                self.remove_last_session()
             else:
-                self.end_session()
-                self.display_session_results(self.session[-1])
-            self.new_session(self.GLOBAL_CURRENT_TIME)
+                self.end_current_session()
+                self.combat_session_live = False
+                self.print_session_results(self.session[-1])
 
         if event == "player_ability_activate":
-            update_session_and_time()
+            update_session_and_time(True)
             self.handle_event_player_power_activate(data)
 
         if event == "player_hit_roll" or event == "player_pet_hit_roll":
-            update_session_and_time()
+            update_session_and_time(True)
             self.handle_event_player_hit_roll(data, event == "player_pet_hit_roll")
 
         elif event == "player_damage" or event == "player_pet_damage":
-            update_session_and_time()
+            update_session_and_time(True)
             self.handle_event_player_damage(data, event == "player_pet_damage")
 
         elif event == "reward_gain_both" or event == "reward_gain_exp" or event == "reward_gain_inf":
@@ -192,6 +219,7 @@ class Parser:
         elif event == "player_name": # This catches the welcome message that includes the player name either at the start of the log, or further down should the player log out and back in
             self.set_player_name(data["player_name"])
             self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
+        
 
     def handle_event_player_power_activate(self, data):
 
@@ -203,14 +231,14 @@ class Parser:
         name = self.PLAYER_NAME
         if name not in self.session[-1].chars: 
             self.session[-1].chars[name] = Character(name)
-            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", self.session[-1].chars[name].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
+            if CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", self.session[-1].chars[name].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
         
         if data["ability"] not in self.session[-1].chars[name].abilities: 
             self.session[-1].chars[name].abilities[data["ability"]] = Ability(data["ability"])
-            if self.CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.session[-1].chars[name].get_name(), ' via Power Activation Event')
+            if CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.session[-1].chars[name].get_name(), ' via Power Activation Event')
 
     def handle_event_player_hit_roll(self, data, pet=False):
-        '''Handles a player hit roll event'''
+        '''Handles a player hit roll event, assumes it came from player instead of pet unless pet=True'''
 
         # Ignore events where the player hits themselves
         if data["target"] == self.PLAYER_NAME:
@@ -234,14 +262,15 @@ class Parser:
 
         if caster not in session.chars: 
             session.chars[caster] = Character(caster)
-            if self.CONSOLE_VERBOSITY >= 2:
+            if pet: session.chars[caster].is_pet = True
+            if CONSOLE_VERBOSITY >= 2:
                 print(f"     Added Character: {caster} to Session: {self.session_count} via Hit Roll Event")
 
         char = session.chars[caster]
 
         if search_ability not in char.abilities:
             char.abilities[search_ability] = Ability(search_ability)
-            if self.CONSOLE_VERBOSITY >= 3:
+            if CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Ability: {search_ability} to Character: {char.get_name()} via Hit Roll Event")
 
         char.get_ability(search_ability).ability_used(data["outcome"] == "HIT")
@@ -270,20 +299,21 @@ class Parser:
 
         if caster not in session.chars:
             session.chars[caster] = Character(caster)
-            if self.CONSOLE_VERBOSITY >= 3:
+            if pet: session.chars[caster].is_pet = True
+            if CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Character: {caster} to Session: {self.session_count} via Damage Event")
 
         char = session.chars[caster]
 
         if search_ability not in char.abilities:
             char.add_ability(search_ability, Ability(search_ability, None, True))
-            if self.CONSOLE_VERBOSITY >= 3:
+            if CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Proc: {search_ability} to Character: {char.get_name()} via Damage Event")
         ability = char.get_ability(search_ability)
-        if self.CONSOLE_VERBOSITY >= 3: 
+        if CONSOLE_VERBOSITY >= 3: 
                 print( '------------- ', ability.name)
         ability.add_damage(DamageComponent(data["damage_type"]), float(data["damage_value"]))
-        if self.CONSOLE_VERBOSITY >= 3: 
+        if CONSOLE_VERBOSITY >= 3: 
                 print ('         Damage Component Added: ', ability.damage[-1].type, ability.damage[-1].total_damage, 'Count: ', ability.damage[-1].count)
   
     def handle_event_reward_gain(self, data):
@@ -309,7 +339,7 @@ class Parser:
         # Convert the date and time into a datetime object
         timestamp = datetime.strptime(date + " " + time, "%Y-%m-%d %H:%M:%S")
         # Convert the datetime object into an int representing the time in seconds
-        timestamp = int(timestamp.strftime("%H%M%S"))
+        timestamp = timestamp.hour * 3600 + timestamp.minute * 60 + timestamp.second
         return timestamp
     
     def update_global_time(self, timestamp):
@@ -376,7 +406,7 @@ class Parser:
     def set_player_name(self, player_name):
         '''Sets the player name'''
         self.PLAYER_NAME = player_name
-        if self.CONSOLE_VERBOSITY>= 2: print('          Player Name Updated to: ', self.PLAYER_NAME)
+        if CONSOLE_VERBOSITY>= 2: print('          Player Name Updated to: ', self.PLAYER_NAME)
         self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
 
 
@@ -400,7 +430,7 @@ class Parser:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 if event != "":
-                    if self.CONSOLE_VERBOSITY == 4: print(event, data)
+                    if CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
         _test_show_results()
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
@@ -417,29 +447,62 @@ class Parser:
 
         self.clean_variables()
 
-        print('          Monitoring Log File: ', self.LOG_FILE_PATH)
-        self.monitoring_live = True
 
-        # locate and assign player name
         self.set_player_name(self.find_player_name())
 
-        # Open the log file in append mode
-        with open(self.LOG_FILE_PATH, 'a+') as file:
-            file.seek(0, 2)  # Move the file pointer to the end of the file
-
-            # Begin monitoring the log file
+        def monitoring_routine():
+            heartbeat = 0
             while self.monitoring_live:
                 line = file.readline()
                 if not line:
+                    heartbeat += 1
                     time.sleep(0.01)
                     continue
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 if event != "":
-                    if self.CONSOLE_VERBOSITY == 4: print(event, data)
+                    if CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
+                    self.live_log_interval_update()
+                    heartbeat = 0
+                elif heartbeat > 100:
+                    event, data = self.extract_datetime_from_line(line)
+                    # TODO: Call a function to update DPS and other values
+                    self.interpret_event(event, data)
+                    self.live_log_interval_update()
+                    heartbeat = 0
+                else:
+                    heartbeat += 1
+                    time.sleep(0.01)
+                    continue
 
-  
+
+        with open(self.LOG_FILE_PATH, 'a+') as file:
+            file.seek(0, 2)  # Move the file pointer to the end of the file
+            print('          Monitoring Log File: ', self.LOG_FILE_PATH)
+            self.monitoring_live = True
+            monitoring_routine()
+
+    def live_log_interval_update(self):
+        '''Calls a recalculation of the current combat session and updates the UI'''
+        if self.monitoring_live == True:
+            if self.combat_session_live == True:
+                try:
+                    session = self.session[-1]
+                    duration = session.get_duration()
+                    dps = session.get_dps()
+                    acc = session.chars[self.PLAYER_NAME].get_accuracy()
+
+                    if duration > 0 and session.get_total_damage() == 0:
+                        session.set_start_time(self.GLOBAL_CURRENT_TIME) # Reset the start time of the session is there still no damage
+
+                    print(" Combat Session: ", self.session_count, " | Duration: ", duration,"s | DPS: ", dps, " | Acc: ", acc, "%", end='\r')
+
+                except IndexError:
+                    print("ERROR     No combat session found")
+        else:
+            print('ERROR     No active combat session')
+
     def clean_variables(self):
         '''Reset all'''
         self.line_count = 0
@@ -458,7 +521,7 @@ class Parser:
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
 
-        if self.CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
+        if CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
         
 class CombatSession:
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
@@ -477,7 +540,6 @@ class CombatSession:
         self.end_time = end_time
     def update_duration(self):
         self.duration = self.end_time - self.start_time
-
     def update_session_time(self, timestamp):
         self.end_time = timestamp
         self.update_duration()
@@ -528,6 +590,7 @@ class Character:
     def __init__(self, name="") -> None:
         self.name = name
         self.abilities = {}
+        self.is_pet = False
 
     def add_ability(self, ability_name, ability):
         self.abilities[ability_name] = ability
@@ -549,7 +612,7 @@ class Character:
         return round(sum,2)
     
     def get_average_damage(self):
-        '''Calculates the average damage for the character by looping through all abilities' average damage and returning the sum'''
+        '''Calculates the overall average damage per hit for the character by looping through all abilities' average damage and returning the sum'''
         average = 0
         if self.abilities == {}: return average
         for ability in self.abilities:
@@ -687,9 +750,11 @@ class DamageComponent:
     
     def get_dps(self, duration):
         '''Calculates the DPS for the damage component'''
-        return round(self.total_damage / duration, 2)
+        if duration == 0: return self.total_damage
+        else: return round(self.total_damage / duration, 2)
     def get_average_damage(self):
         '''Calculates the average damage for the damage component'''
+        if self.count == 0: return self.total_damage
         return round(self.total_damage / self.count,2)
     def get_highest_damage(self):
         '''Returns the highest damage for the damage component'''
