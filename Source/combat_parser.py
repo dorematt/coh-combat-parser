@@ -141,9 +141,9 @@ class Parser:
         for char in sorted_chars:
             print('---------------------------------')
             if session.chars[char].is_pet:
-                print('  Char: ', char)
-            else:
                 print('  Pet: ', char)
+            else:
+                print('  Char: ', char)
             print('     DPS: ', session.chars[char].get_dps(session.get_duration()), ' | Acc: ', session.chars[char].get_accuracy(), '%')
             print('     Total : ', session.chars[char].get_total_damage(), ' | Avg Hit : ', session.chars[char].get_average_damage())
             print('\n')
