@@ -519,8 +519,10 @@ class Parser(QObject):
 
 
             except IndexError:
-                print("ERROR     No combat session found")
-
+                print("WARNING     No combat session found to update")
+            
+            except KeyError:
+                print("WARNING     No player found in combat session") # This exception might get raised in cases where self-damaging abilities
             if CLI_MODE: print(" Combat Session: ", self.session_count, " | Duration: ", duration, "s | DPS: ", dps,
                 " | Acc: ", acc, "%", end='\r')
             else: self.sig_periodic_update.emit(self.combat_session_data)
