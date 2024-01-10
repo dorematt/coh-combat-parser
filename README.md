@@ -17,7 +17,7 @@ This is currently in **ALPHA** - expect code to be buggy and possible inaccuraci
 
 ## Installation and Operation
 
-1. In the Releases, download the  `CoH_Parser.exe` file, ignore the rest as this is source code.
+1. In the [Releases](https://github.com/dorematt/coh-combat-parser/releases) page, download the  `CoH_Parser.exe` file, ignore the rest as this is source code.
 2. Ingame, check your ‘Combat’ Channel and add in all combat related channels
     1. Right-Click to edit channel
     2. Move over all the combat fields if they’re not already there (Most likely, the pet combat fields won’t be included)
