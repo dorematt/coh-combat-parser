@@ -1,24 +1,39 @@
-# coh-combat-parser
-This program is a very basic (and very feature incomplete) combat log for City of Heroes. This is predominantly just a project that I could work on to get a some more coding experience but I’ve decided to make it available more widely to anyone who wants to use it, or expand on it a bit further. It is currently limited to just the data that can be pulled out from the log files, also this is **VERY ALPHA** code, expect things to break, expect results to maybe not be 100% accurate, but they should be close
+# City of Heroes - Combat Parser
+A Very basic Python-based parsing program for City of Heroes. This will read chat logs to parse combat data both in realtime and for previous encounters.
 
-This is also, by no means, intended to detract from the work Carnifax put into his online-based parser. In fact, he does have quite a bit more detail within his including handy charts and graphs that allow you to better see your damage peaks and troughs throughout a match
+This is currently in **ALPHA** - expect code to be buggy and possible inaccuracies in the data.
+
 
 ### What it can do
 
 - Log outgoing damage from yourself and from your pets
     - Calculate overall DPS
-    - Split DPS into individual passes / abilities and procs
+    - Show damage data for individual abilities, procs, and their damage types
     - Calculate the average damage per hit, per ability
-- Log incoming damage to yourself
-- Log Healing and Endurance recovery occurances
 - Log hit accuracy
-- Automatically start, pause and stop logs
-    - A log will start when you take damage
-    - Options to either pause the log or stop the log altogether if it has been several seconds since you last took or dealt damage
+- Automatically split logs into combat sessions
+    - A Sesison starts when you activate an ability and finishes 15 seconds after no further damage was done
+    - Session duration is measured from the first damaging ability to the last (to the nearest second) 
 
-### What it can't do
+## Installation and Operation
 
-- Make your coffee
-- Parse data from other players (the combat logs don't provide visiblity to this data currently)
-- factor in Regen
-    - Again, this is a limitation on the information provided exclusively by chat logs
+1. In the Releases, download the  `CoH_Parser.exe` file, ignore the rest as this is source code.
+2. Ingame, check your ‘Combat’ Channel and add in all combat related channels
+    1. Right-Click to edit channel
+    2. Move over all the combat fields if they’re not already there (Most likely, the pet combat fields won’t be included)
+        1. If you don’t want to mess up or clutter that tab, you can make a new tab and put all the combat info in there. As long as all the combat data is being collected by at least one of your tabs, that data will be logged into the file.
+    3. Save settings
+3. Make sure you have **“Log Chat”** enabled in the Options
+    1. This is found under **Options > Windows > Chat**
+4. Run the .exe and browse for the log file
+    1. Open up the directory where your game is installed to
+    2. Then go to `/accounts/_YOUR_ACCOUNT_NAME_/logs/`
+    3. Choose the log file you want to process or monitor (you’ll want the one dated to today if you’re running live)
+
+
+
+### For Devs
+Just in case you wanted to take a look around, the environment should be fairly straightforward to set up.
+
+1. Make sure you have [Python](https://www.python.org/) (version 3.12) installed
+2. Clone the repo and then create a _venv_ environemnt in the project directory and `pip install` the dependencies from requirements.txt
