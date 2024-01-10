@@ -6,10 +6,12 @@ import random
 import tkinter as tk
 from tkinter import filedialog
 import sys
+from PyQt5.QtCore import QObject, pyqtSignal, QMutex, QMutexLocker
 
 CONSOLE_VERBOSITY = 1
+CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
-class Parser:
+class Parser(QObject):
     '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
     PATTERNS = {
         "player_ability_activate": re.compile(
@@ -61,14 +63,17 @@ class Parser:
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2})"
         )
     }
-
     LOG_FILE_PATH = ""
     PLAYER_NAME = ""
     COMBAT_SESSION_TIMEOUT = 15 # Seconds, determines how long to wait between  # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
+    combat_session_data = [] # Stores a list of combat sessions
+    mutex = QMutex()
+    sig_finished = pyqtSignal(list)
+    sig_periodic_update = pyqtSignal(list)
 
     def __init__(self, LOG_FILE_PATH = ""):
-
+        super().__init__()
         print('     Parser Initialize...')
         self.clean_variables()
     
@@ -97,16 +102,16 @@ class Parser:
 
     def new_session(self, timestamp):
         self.session_count += 1
-        self.session.append(CombatSession(timestamp))
+        self.combat_session_data.append(CombatSession(timestamp))
         self.combat_session_live = True
         if CONSOLE_VERBOSITY >= 1: print ("---------->  Combat Session Started: ", self.session_count, '\n')
-        return self.session[-1]
+        return self.combat_session_data[-1]
     def check_session(self, timestamp):
         '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
 
         if self.combat_session_live:
             # print('     Checking Session: ', self.session_count, ' With a duration of ', self.session[-1].get_duration(), ' seconds')
-            chk_time = timestamp - self.session[-1].end_time
+            chk_time = timestamp - self.combat_session_data[-1].end_time
             # print(' Time since last activity in session: ', chk_time, ' seconds')
             if chk_time > self.COMBAT_SESSION_TIMEOUT:
                 return -1 # Session over timeout
@@ -115,20 +120,20 @@ class Parser:
         return 0 # No active session
     def end_current_session(self):
         '''Ends the current combat session'''
-        self.session[-1].update_duration()
+        self.combat_session_data[-1].update_duration()
         self.combat_session_live = False
-        self.add_global_combat_duration(self.session[-1].get_duration())
-        if CONSOLE_VERBOSITY >= 1: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.session[-1].get_duration(), " seconds \n")
+        self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
+        if CONSOLE_VERBOSITY >= 1: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
     def remove_last_session(self):
         '''Removes the current combat session'''
         if CONSOLE_VERBOSITY >= 1: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
-        self.session.pop()
+        self.combat_session_data.pop()
         self.session_count -= 1
         self.combat_session_live = False
         
     def update_session_time(self, timestamp):
         '''Updates the current combat session time'''
-        self.session[-1].update_session_time(timestamp)
+        self.combat_session_data[-1].update_session_time(timestamp)
     def print_session_results(self, session):
         '''Displays the results of the current combat session'''
         print('\n', '\n') 
@@ -178,48 +183,49 @@ class Parser:
         # Check for an active combat session and determine if it is still active
 
         # Update the current time and check combat session status
-        self.update_global_time(self.convert_timestamp(data["date"], data["time"]))
-        status = self.check_session(self.GLOBAL_CURRENT_TIME)
+        with QMutexLocker(self.mutex):
+            self.update_global_time(self.convert_timestamp(data["date"], data["time"]))
+            status = self.check_session(self.GLOBAL_CURRENT_TIME)
 
-        def update_session_and_time(in_combat=False): # Helper function to call session updates as well as beginning new sessions
-            if (status == 0 or status == -1) and in_combat:
-                self.new_session(self.GLOBAL_CURRENT_TIME) # We 
-            self.session[-1].update_session_time(self.GLOBAL_CURRENT_TIME)
+            def update_session_and_time(in_combat=False): # Helper function to call session updates as well as beginning new sessions
+                if (status == 0 or status == -1) and in_combat:
+                    self.new_session(self.GLOBAL_CURRENT_TIME) # We 
+                self.combat_session_data[-1].update_session_time(self.GLOBAL_CURRENT_TIME)
 
 
-        if status == -1: # Checking for a timed-out combat session
+            if status == -1: # Checking for a timed-out combat session
 
-            # Remove the session if it had no damage
-            if self.session[-1].get_total_damage() == 0:
-                self.remove_last_session()
-            else:
-                self.end_current_session()
-                self.combat_session_live = False
-                self.print_session_results(self.session[-1])
+                # Remove the session if it had no damage
+                if self.combat_session_data[-1].get_total_damage() == 0:
+                    self.remove_last_session()
+                else:
+                    self.end_current_session()
+                    self.combat_session_live = False
+                    self.print_session_results(self.combat_session_data[-1])
 
-        if event == "player_ability_activate":
-            update_session_and_time(True)
-            self.handle_event_player_power_activate(data)
+            if event == "player_ability_activate":
+                update_session_and_time(True)
+                self.handle_event_player_power_activate(data)
 
-        if event == "player_hit_roll" or event == "player_pet_hit_roll":
-            update_session_and_time(True)
-            self.handle_event_player_hit_roll(data, event == "player_pet_hit_roll")
+            if event == "player_hit_roll" or event == "player_pet_hit_roll":
+                update_session_and_time(True)
+                self.handle_event_player_hit_roll(data, event == "player_pet_hit_roll")
 
-        elif event == "player_damage" or event == "player_pet_damage":
-            update_session_and_time(True)
-            self.handle_event_player_damage(data, event == "player_pet_damage")
+            elif event == "player_damage" or event == "player_pet_damage":
+                update_session_and_time(True)
+                self.handle_event_player_damage(data, event == "player_pet_damage")
 
-        elif event == "reward_gain_both" or event == "reward_gain_exp" or event == "reward_gain_inf":
-            if data.get("exp_value") is None:
-                data["exp_value"] = ""
-            if data.get("inf_value") is None: 
-                data["inf_value"] = ""
-            self.handle_event_reward_gain(data)
+            elif event == "reward_gain_both" or event == "reward_gain_exp" or event == "reward_gain_inf":
+                if data.get("exp_value") is None:
+                    data["exp_value"] = ""
+                if data.get("inf_value") is None: 
+                    data["inf_value"] = ""
+                self.handle_event_reward_gain(data)
 
-        elif event == "player_name": # This catches the welcome message that includes the player name either at the start of the log, or further down should the player log out and back in
-            self.set_player_name(data["player_name"])
-            self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
-        
+            elif event == "player_name": # This catches the welcome message that includes the player name either at the start of the log, or further down should the player log out and back in
+                self.set_player_name(data["player_name"])
+                self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
+            
 
     def handle_event_player_power_activate(self, data):
 
@@ -229,13 +235,13 @@ class Parser:
         
         # Check if the player is in the char list for the current session, if not, add them and add the ability.
         name = self.PLAYER_NAME
-        if name not in self.session[-1].chars: 
-            self.session[-1].chars[name] = Character(name)
-            if CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", self.session[-1].chars[name].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
+        if name not in self.combat_session_data[-1].chars: 
+            self.combat_session_data[-1].chars[name] = Character(name)
+            if CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", self.combat_session_data[-1].chars[name].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
         
-        if data["ability"] not in self.session[-1].chars[name].abilities: 
-            self.session[-1].chars[name].abilities[data["ability"]] = Ability(data["ability"])
-            if CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.session[-1].chars[name].get_name(), ' via Power Activation Event')
+        if data["ability"] not in self.combat_session_data[-1].chars[name].abilities: 
+            self.combat_session_data[-1].chars[name].abilities[data["ability"]] = Ability(data["ability"])
+            if CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.combat_session_data[-1].chars[name].get_name(), ' via Power Activation Event')
 
     def handle_event_player_hit_roll(self, data, pet=False):
         '''Handles a player hit roll event, assumes it came from player instead of pet unless pet=True'''
@@ -258,7 +264,7 @@ class Parser:
         active_ability.ability_used(data["outcome"] == "HIT")
 
         # Check and update the session's character list
-        session = self.session[-1]
+        session = self.combat_session_data[-1]
 
         if caster not in session.chars: 
             session.chars[caster] = Character(caster)
@@ -295,7 +301,7 @@ class Parser:
         active_ability.add_damage(DamageComponent(data["damage_type"]),float( data["damage_value"]))
 
         # Check and update the session's character list
-        session = self.session[-1]
+        session = self.combat_session_data[-1]
 
         if caster not in session.chars:
             session.chars[caster] = Character(caster)
@@ -331,8 +337,8 @@ class Parser:
 
         # Check for an active combat session and add the exp and inf to the session rewards
         if self.combat_session_live:
-            self.session[-1].add_exp(exp_value)
-            self.session[-1].add_inf(inf_value)
+            self.combat_session_data[-1].add_exp(exp_value)
+            self.combat_session_data[-1].add_inf(inf_value)
 
     def convert_timestamp(self, date, time):
         '''Converts a timestamp from the log file into a datetime object and returns an int representing the time in seconds'''
@@ -425,15 +431,16 @@ class Parser:
         #self.set_player_name(self.find_player_name())
         
         #Open file and iterate through each line
-        with open(self.LOG_FILE_PATH, 'r') as file:
+        with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             for line in file:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 if event != "":
                     if CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
-        _test_show_results()
+        if CLI_MODE: _test_show_results()
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
+        self.sig_finished.emit(self.combat_session_data)
         return True
     
     def process_live_log(self, file_path):
@@ -475,6 +482,9 @@ class Parser:
                     heartbeat += 1
                     time.sleep(0.01)
                     continue
+            
+            print('          Monitoring Terminated')
+            self.sig_finished.emit(self.combat_session_data)
 
 
         with open(self.LOG_FILE_PATH, 'a+') as file:
@@ -485,28 +495,37 @@ class Parser:
 
     def live_log_interval_update(self):
         '''Calls a recalculation of the current combat session and updates the UI'''
-        if self.monitoring_live == True:
-            if self.combat_session_live == True:
-                try:
-                    session = self.session[-1]
-                    duration = session.get_duration()
-                    dps = session.get_dps()
-                    acc = session.chars[self.PLAYER_NAME].get_accuracy()
-
-                    if duration > 0 and session.get_total_damage() == 0:
-                        session.set_start_time(self.GLOBAL_CURRENT_TIME) # Reset the start time of the session is there still no damage
-
-                    print(" Combat Session: ", self.session_count, " | Duration: ", duration,"s | DPS: ", dps, " | Acc: ", acc, "%", end='\r')
-
-                except IndexError:
-                    print("ERROR     No combat session found")
-        else:
+        # if not CLI_MODE: return
+        if not (self.monitoring_live and self.combat_session_live):
             print('ERROR     No active combat session')
+            return
+
+        with QMutexLocker(self.mutex):
+            try:
+                session = self.combat_session_data[-1]
+                duration = session.get_duration()
+                dps = session.get_dps()
+                acc = session.chars[self.PLAYER_NAME].get_accuracy()
+
+                if duration > 0 and session.get_total_damage() == 0:
+                    session.set_start_time(self.GLOBAL_CURRENT_TIME)  # Reset the start time if there's still no damage
+
+
+            except IndexError:
+                print("ERROR     No combat session found")
+
+            print(" Combat Session: ", self.session_count, " | Duration: ", duration, "s | DPS: ", dps,
+                " | Acc: ", acc, "%", end='\r')
+            self.sig_periodic_update.emit(self.combat_session_data)
+
+    def on_sig_stop_monitoring(self):
+        '''Stops monitoring the log file'''
+        self.monitoring_live = False
 
     def clean_variables(self):
         '''Reset all'''
         self.line_count = 0
-        self.session = [] # Stores a list of combat sessions
+        self.combat_session_data = [] # Stores a list of combat sessions
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
         self.combat_session_live = False # Flag to indicate if a combat session is active
         self.global_combat_duration = 0 # Stores the total durations of all combat sessions
@@ -523,16 +542,18 @@ class Parser:
 
         if CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
         
-class CombatSession:
+class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
     CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.''' 
     def __init__(self, timestamp=0):
+        super().__init__()
         self.start_time = timestamp
         self.end_time = timestamp
         self.duration = 0 # Seconds
         self.chars = {} # Stores a list of characters
         self.exp_value = 0
         self.inf_value = 0
+        
 
     def set_start_time(self, start_time):
         self.start_time = start_time
@@ -582,12 +603,12 @@ class CombatSession:
         return self.inf_value
     
     def add_character(self, character):
-        self.chars.append(character)
+        self.chars[character.get_name()] = character
 
-class Character:
+class Character(QObject):
     '''Stores data about a character, this can be the Player, pets or enemies'''
-    # TODO: Expand this class
     def __init__(self, name="") -> None:
+        super().__init__()
         self.name = name
         self.abilities = {}
         self.is_pet = False
@@ -646,9 +667,10 @@ class Character:
             count += self.abilities[ability].get_count()
         return count
     
-class Ability:
+class Ability(QObject):
     '''Stores data about an ability used'''
     def __init__(self, name, hit=None, proc=False):
+        super().__init__()
         self.name = name
         self.count = 0 if hit is None else 1
         self.hits = 1 if hit is True else 0
@@ -731,9 +753,10 @@ class Ability:
         '''Returns the number of times the ability has hit'''
         return self.hits
 
-class DamageComponent:
+class DamageComponent(QObject):
     '''Stores data about a damage component'''
     def __init__(self, type="", value : float = 0):
+        super().__init__()
         self.count = 0
         self.type = type
         self.name = type
@@ -948,6 +971,7 @@ if __name__ == "__main__":
     self = Parser()
     
     self.line_count = 0
+    CLI_MODE = True
 
     #Initiate tests
     #_test_hit_rolls()
