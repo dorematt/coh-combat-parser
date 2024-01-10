@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal
 from CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
 import random
 import os.path
+VERSION = "0.0.3"
 
 class ParserThread(QThread):
     def __init__(self, file_path: str, live: bool):
@@ -43,7 +44,7 @@ class LogMonitorUI(QMainWindow):
         def define_main_window():
             # Set up the main window
             self.setGeometry(200, 200, 1400, 700)
-            self.setWindowTitle("Combat Log Parser")
+            self.setWindowTitle("CoH Log Combat Parser - v" + VERSION)
 
             # Initialize UI Variables
             self.file_path_var = QLineEdit(self.last_file_path)
