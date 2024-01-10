@@ -6,8 +6,7 @@ import random
 from tkinter import filedialog as tk
 import sys
 from PyQt5.QtCore import QObject, pyqtSignal, QMutex, QMutexLocker
-
-CONSOLE_VERBOSITY = 1
+from CoH_Parser import Globals
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
 class Parser(QObject):
@@ -81,7 +80,7 @@ class Parser(QObject):
         for key, regex in self.PATTERNS.items():
             updated_pattern = regex.pattern.replace('PLAYER_NAME', player_name)
             updated_regex = re.compile(updated_pattern)
-            if CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
+            if Globals.CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
             updated_patterns[key] = updated_regex
         return updated_patterns
     
@@ -104,7 +103,7 @@ class Parser(QObject):
         self.session_count += 1
         self.combat_session_data.append(CombatSession(timestamp))
         self.combat_session_live = True
-        if CONSOLE_VERBOSITY >= 2: print ("---------->  Combat Session Started: ", self.session_count, '\n')
+        if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Combat Session Started: ", self.session_count, '\n')
         return self.combat_session_data[-1]
     def check_session(self, timestamp):
         '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
@@ -123,10 +122,10 @@ class Parser(QObject):
         self.combat_session_data[-1].update_duration()
         self.combat_session_live = False
         self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
-        if CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
+        if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
     def remove_last_session(self):
         '''Removes the current combat session'''
-        if CONSOLE_VERBOSITY >= 2: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
+        if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
         self.combat_session_data.pop()
         self.session_count -= 1
         self.combat_session_live = False
@@ -170,7 +169,7 @@ class Parser(QObject):
                         print('            Damage Type: ', component.type,'| T:', component.total_damage,'| H:', component.highest_damage, '| L:', component.lowest_damage, '| Count: ', component.count)
                     print('')
 
-            if CONSOLE_VERBOSITY > 1:
+            if Globals.CONSOLE_VERBOSITY > 1:
                 # Sort abilities by DPS
                 sorted_abilities = sorted(session.chars[char].abilities.keys(), key=lambda ability: session.chars[char].abilities[ability].get_dps(session.get_duration()), reverse=True)
                 print_sorted_abilities(sorted_abilities)
@@ -241,12 +240,12 @@ class Parser(QObject):
         name = self.PLAYER_NAME
         if name not in self.combat_session_data[-1].chars: 
             self.combat_session_data[-1].chars[name] = Character(name)
-            if CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", self.combat_session_data[-1].chars[name].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
+            if Globals.CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", self.combat_session_data[-1].chars[name].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
         
         if data["ability"] not in self.combat_session_data[-1].chars[name].abilities: 
             self.combat_session_data[-1].chars[name].abilities[data["ability"]] = Ability(data["ability"])
             
-            if CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.combat_session_data[-1].chars[name].get_name(), ' via Power Activation Event')
+            if Globals.CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.combat_session_data[-1].chars[name].get_name(), ' via Power Activation Event')
         
         self.combat_session_data[-1].chars[name].abilities[data["ability"]].ability_used()
 
@@ -276,14 +275,14 @@ class Parser(QObject):
         if caster not in session.chars: 
             session.chars[caster] = Character(caster)
             if pet: session.chars[caster].is_pet = True
-            if CONSOLE_VERBOSITY >= 2:
+            if Globals.CONSOLE_VERBOSITY >= 2:
                 print(f"     Added Character: {caster} to Session: {self.session_count} via Hit Roll Event")
 
         char = session.chars[caster]
 
         if search_ability not in char.abilities:
             char.abilities[search_ability] = Ability(search_ability)
-            if CONSOLE_VERBOSITY >= 3:
+            if Globals.CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Ability: {search_ability} to Character: {char.get_name()} via Hit Roll Event")
 
         # if pet: char.get_ability(search_ability).ability_used() # We don't have power activation events for pets, so we'll use the hit roll as a proxy for ability usage
@@ -313,20 +312,20 @@ class Parser(QObject):
         if caster not in session.chars:
             session.chars[caster] = Character(caster)
             if pet: session.chars[caster].is_pet = True
-            if CONSOLE_VERBOSITY >= 3:
+            if Globals.CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Character: {caster} to Session: {self.session_count} via Damage Event")
 
         char = session.chars[caster]
 
         if search_ability not in char.abilities:
             char.add_ability(search_ability, Ability(search_ability, None, True))
-            if CONSOLE_VERBOSITY >= 3:
+            if Globals.CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Proc: {search_ability} to Character: {char.get_name()} via Damage Event")
         ability = char.get_ability(search_ability)
-        if CONSOLE_VERBOSITY >= 3: 
+        if Globals.CONSOLE_VERBOSITY >= 3: 
                 print( '------------- ', ability.name)
         ability.add_damage(DamageComponent(data["damage_type"]), float(data["damage_value"]))
-        if CONSOLE_VERBOSITY >= 3: 
+        if Globals.CONSOLE_VERBOSITY >= 3: 
                 print ('         Damage Component Added: ', ability.damage[-1].type, ability.damage[-1].total_damage, 'Count: ', ability.damage[-1].count)
   
     def handle_event_reward_gain(self, data):
@@ -419,7 +418,7 @@ class Parser(QObject):
     def set_player_name(self, player_name):
         '''Sets the player name'''
         self.PLAYER_NAME = player_name
-        if CONSOLE_VERBOSITY>= 2: print('          Player Name Updated to: ', self.PLAYER_NAME)
+        if Globals.CONSOLE_VERBOSITY>= 2: print('          Player Name Updated to: ', self.PLAYER_NAME)
         self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
 
 
@@ -443,7 +442,7 @@ class Parser(QObject):
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 if event != "":
-                    if CONSOLE_VERBOSITY == 4: print(event, data)
+                    if Globals.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
         if CLI_MODE: _test_show_results()
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
@@ -475,7 +474,7 @@ class Parser(QObject):
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 if event != "":
-                    if CONSOLE_VERBOSITY == 4: print(event, data)
+                    if Globals.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
                     self.live_log_interval_update()
                     heartbeat = 0
@@ -549,7 +548,7 @@ class Parser(QObject):
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
 
-        if CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
+        if Globals.CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
         
 class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.

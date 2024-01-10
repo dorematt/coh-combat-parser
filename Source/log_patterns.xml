@@ -1,5 +1,0 @@
-<logPatterns>
-    <pattern type="include">total_damage</pattern>
-    <pattern type="include">other_pattern</pattern>
-    <pattern type="exclude">exclude_pattern</pattern>
-</logPatterns>
