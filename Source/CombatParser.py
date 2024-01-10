@@ -249,6 +249,7 @@ class Parser(QObject):
             if CONSOLE_VERBOSITY >= 3: print("     Added Ability: ", data["ability"], " to Character: ", self.combat_session_data[-1].chars[name].get_name(), ' via Power Activation Event')
         
         self.combat_session_data[-1].chars[name].abilities[data["ability"]].ability_used()
+
     def handle_event_player_hit_roll(self, data, pet=False):
         '''Handles a player hit roll event, assumes it came from player instead of pet unless pet=True'''
 
@@ -285,8 +286,8 @@ class Parser(QObject):
             if CONSOLE_VERBOSITY >= 3:
                 print(f"     Added Ability: {search_ability} to Character: {char.get_name()} via Hit Roll Event")
 
-        char.get_ability(search_ability).ability_hit(data["outcome"] == "HIT")
-
+        # if pet: char.get_ability(search_ability).ability_used() # We don't have power activation events for pets, so we'll use the hit roll as a proxy for ability usage
+        char.get_ability(search_ability).ability_hit(data["outcome"] == "HIT") 
     def handle_event_player_damage(self, data, pet=False):
         '''Handles a player damage event'''
 

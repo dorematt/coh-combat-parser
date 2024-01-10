@@ -2,7 +2,7 @@ from LogMonitorUI import LogMonitorUI
 from CombatParser import Parser
 from PyQt5.QtWidgets import QApplication
 import sys
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 BUILD_DATE = "10 Jan 2024"
 BUILD_TYPE = "ALPHA"
 AUTHOR = "@10kVolts"

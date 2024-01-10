@@ -42,7 +42,7 @@ class LogMonitorUI(QMainWindow):
         print("Initializing UI...")
         def define_main_window():
             # Set up the main window
-            self.setGeometry(300, 300, 1200, 660)
+            self.setGeometry(200, 200, 1400, 700)
             self.setWindowTitle("Combat Log Parser")
 
             # Initialize UI Variables
@@ -65,7 +65,7 @@ class LogMonitorUI(QMainWindow):
             self.ability_tree_display.setSortingEnabled(True)
 
             self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total"])
-            self.ability_tree_display.setColumnWidth(0, 225)
+            self.ability_tree_display.setColumnWidth(0, 250)
             self.ability_tree_display.setColumnWidth(1, 75)
             self.ability_tree_display.setColumnWidth(2, 75)
             self.ability_tree_display.setColumnWidth(3, 100)
@@ -80,14 +80,16 @@ class LogMonitorUI(QMainWindow):
         def define_combat_session_tree():
             # Combat Session Tree
             self.combat_session_tree = QTreeWidget()
-            self.combat_session_tree.setHeaderLabels(["Session", "Duration","DPS"])
+            self.combat_session_tree.setHeaderLabels(["Session", "Duration","DPS", "EXP", "Inf"])
             self.combat_session_tree.setColumnWidth(0, 100)
             self.combat_session_tree.setColumnWidth(1, 75)
             self.combat_session_tree.setColumnWidth(2, 75)
+            self.combat_session_tree.setColumnWidth(3, 80)
+            self.combat_session_tree.setColumnWidth(4, 80)
             self.combat_session_tree.setSelectionMode(QTreeWidget.SingleSelection)
-            self.combat_session_tree.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-            self.combat_session_tree.setMinimumWidth(200)
-            self.combat_session_tree.setMaximumWidth(300)
+            self.combat_session_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.combat_session_tree.setMinimumWidth(250)
+            self.combat_session_tree.setMaximumWidth(420)
 
             self.combat_session_tree.itemSelectionChanged.connect(self.on_session_selection_change)
         def setup_layout():
@@ -244,7 +246,6 @@ class LogMonitorUI(QMainWindow):
             self.repopulate(self.selected_session)
 
     def repopulate_sessions(self, combat_session_list: list):
-        
         '''Populates the treeWidget with data from the provided list of combat sessions'''
         # Clear the treeWidget
         self.combat_session_tree.clear()
@@ -252,6 +253,8 @@ class LogMonitorUI(QMainWindow):
             session_item = QTreeWidgetItem(self.combat_session_tree, [str(session)])
             session_item.setText(1, str(combat_session.duration) + "s")
             session_item.setText(2, str(combat_session.get_dps()))
+            session_item.setText(3, "{:,}".format(combat_session.get_exp()))
+            session_item.setText(4, "{:,}".format(combat_session.get_inf()))
 
     def repopulate(self, session):
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
@@ -264,20 +267,27 @@ class LogMonitorUI(QMainWindow):
             character_item = QTreeWidgetItem(tree_widget, [character_name])
             set_styling(character_item, font_size=11, is_bold=True, background_color=QColor(240, 240, 240))
             character_item.setData(1, Qt.DisplayRole, character.get_dps(duration))
-            character_item.setData(2, Qt.DisplayRole, f"{character.get_accuracy()}%")
-            character_item.setData(3, Qt.DisplayRole, character.get_average_damage())
-            character_item.setData(7, Qt.DisplayRole, character.get_total_damage())
+            character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
+            character_item.setData(3, Qt.DisplayRole, "{:,}".format(character.get_average_damage()))
+            character_item.setData(7, Qt.DisplayRole, "{:,}".format(character.get_total_damage()))
+
+            character_item.setTextAlignment(2, Qt.AlignCenter)
+            character_item.setTextAlignment(3, Qt.AlignCenter)
+            character_item.setTextAlignment(4, Qt.AlignCenter)
+            character_item.setTextAlignment(5, Qt.AlignCenter)
+            character_item.setTextAlignment(6, Qt.AlignCenter)
+
             return character_item
 
         def create_ability_item(parent_item, ability_name, duration):
             ability_item = QTreeWidgetItem(parent_item, [ability_name])
             ability_item.setData(1, Qt.DisplayRole, ability.get_dps(duration))
-            ability_item.setData(2, Qt.DisplayRole, f"{ability.get_accuracy()}%")
-            ability_item.setData(3, Qt.DisplayRole, ability.get_average_damage())
-            ability_item.setData(4, Qt.DisplayRole, ability.get_count())
-            ability_item.setData(5, Qt.DisplayRole, ability.get_max_damage())
-            ability_item.setData(6, Qt.DisplayRole, ability.get_min_damage())
-            ability_item.setData(7, Qt.DisplayRole, ability.get_total_damage())
+            ability_item.setData(2, Qt.DisplayRole, "{:,}%".format(ability.get_accuracy()))
+            ability_item.setData(3, Qt.DisplayRole, "{:,}".format(ability.get_average_damage()))
+            ability_item.setData(4, Qt.DisplayRole, "{:,}".format(ability.get_count()))
+            ability_item.setData(5, Qt.DisplayRole, "{:,}".format(ability.get_max_damage()))
+            ability_item.setData(6, Qt.DisplayRole, "{:,}".format(ability.get_min_damage()))
+            ability_item.setData(7, Qt.DisplayRole, "{:,}".format(ability.get_total_damage()))
 
             ability_item.setTextAlignment(2, Qt.AlignCenter)
             ability_item.setTextAlignment(3, Qt.AlignCenter)
@@ -289,11 +299,11 @@ class LogMonitorUI(QMainWindow):
 
         def create_damage_item(parent_item, damage_name, duration):
             damage_item = QTreeWidgetItem(parent_item, [damage_name.name])
-            damage_item.setData(1, Qt.DisplayRole, damage_name.get_dps(duration))
-            damage_item.setData(3, Qt.DisplayRole, damage_name.get_average_damage())
-            damage_item.setData(4, Qt.DisplayRole, damage_name.get_count())
-            damage_item.setData(5, Qt.DisplayRole, damage_name.get_highest_damage())
-            damage_item.setData(6, Qt.DisplayRole, damage_name.get_lowest_damage())
+            damage_item.setData(1, Qt.DisplayRole,damage_name.get_dps(duration))
+            damage_item.setData(3, Qt.DisplayRole, "{:,}".format(damage_name.get_average_damage()))
+            damage_item.setData(4, Qt.DisplayRole, "{:,}".format(damage_name.get_count()))
+            damage_item.setData(5, Qt.DisplayRole, "{:,}".format(damage_name.get_highest_damage()))
+            damage_item.setData(6, Qt.DisplayRole, "{:,}".format(damage_name.get_lowest_damage()))
             
 
             damage_item.setTextAlignment(2, Qt.AlignCenter)
@@ -382,6 +392,8 @@ class LogMonitorUI(QMainWindow):
             for i in range(0, 4):
                 test_sessions.append(CombatSession("Combat Session " + str(i)))
                 test_sessions[i].duration = random.randint(60, 180)
+                test_sessions[i].add_exp(random.randint(1000, 9999999))
+                test_sessions[i].add_inf(random.randint(1000, 9999999))
 
                 for j in range(0, 3): #Combat Sessions
                     character = Character(pick_random_name())
