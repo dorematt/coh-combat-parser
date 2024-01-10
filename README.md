@@ -31,6 +31,8 @@ This is currently in **ALPHA** - expect code to be buggy and possible inaccuraci
     3. Choose the log file you want to process or monitor (you’ll want the one dated to today if you’re running live)
 
 
+### Contact
+Any bugs drop into the Issues section or reach out to **@10kVolts** ingame or on the HC Forums (discord @10kvolts), or drop a messsage on the forum post https://forums.homecomingservers.com/topic/47397-tenkays-standalone-log-combat-parser/
 
 ### For Devs
 Just in case you wanted to take a look around, the environment should be fairly straightforward to set up.
