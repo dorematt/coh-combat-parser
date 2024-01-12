@@ -271,11 +271,10 @@ class Parser(QObject):
             return
 
         # Determine the ability and caster based on pet status
+        search_ability = data["ability"]
         if pet:
-            search_ability = f"{data['pet_name']}: {data['ability']}"
             caster = data["pet_name"]
         else:
-            search_ability = data["ability"]
             caster = self.PLAYER_NAME
 
         # Create or get the ability and update hit roll
@@ -308,11 +307,10 @@ class Parser(QObject):
             return
 
         # determine if this is a pet or the player damage event
+        search_ability = data["ability"]
         if pet:
-            search_ability = f"{data['pet_name']}: {data['ability']}"
             caster = data["pet_name"]
         else:
-            search_ability = data["ability"]
             caster = self.PLAYER_NAME
 
         # Create or get the ability and update damage
