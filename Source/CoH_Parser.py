@@ -1,10 +1,11 @@
 class Globals:
-    VERSION = "0.0.3"
+    VERSION = "0.0.4"
     BUILD_DATE = "11 Jan 2024"
     BUILD_TYPE = "ALPHA"
     AUTHOR = "@10kVolts"
     CONTRIBUTORS = []
     CONSOLE_VERBOSITY = 1
+    COMBAT_SESSION_TIMEOUT = 15
 
 def main():
     from LogMonitorUI import LogMonitorUI

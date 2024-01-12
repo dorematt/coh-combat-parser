@@ -5,7 +5,7 @@ from datetime import datetime
 import random
 from tkinter import filedialog as tk
 import sys
-from PyQt5.QtCore import QObject, pyqtSignal, QMutex, QMutexLocker
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QThread
 from CoH_Parser import Globals
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
@@ -62,17 +62,26 @@ class Parser(QObject):
         )
     }
     LOG_FILE_PATH = ""
-    PLAYER_NAME = ""
-    COMBAT_SESSION_TIMEOUT = 15 # Seconds, determines how long to wait between  # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
+    log_file = None
+    PLAYER_NAME = ""# Seconds, determines how long to wait between  # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
     combat_session_data = [] # Stores a list of combat sessions
     mutex = QMutex()
     sig_finished = pyqtSignal(list)
     sig_periodic_update = pyqtSignal(list)
+    parentThread = None
+    final_update = False # Flag to indicate if a final update is required
 
-    def __init__(self, LOG_FILE_PATH = ""):
+    def __init__(self, parent=None):
         super().__init__()
         print('     Parser Initialize...')
+        if Globals.CONSOLE_VERBOSITY>= 3: print("Creating interval_timer")
+        self.interval_timer = QTimer(parent) # Handles preriodic UI update events
+        self.interval_timer.timeout.connect(self.live_log_interval_update)
+        self.interval_timer.setInterval(250)
+        self.interval_timedout = False
+
+        self.monitoring_timer = QTimer(parent)
         self.clean_variables()
     
     def update_regex_player_name(self, player_name):
@@ -103,6 +112,7 @@ class Parser(QObject):
         self.session_count += 1
         self.combat_session_data.append(CombatSession(timestamp))
         self.combat_session_live = True
+        if self.monitoring_live: self.interval_timer.start() # Begins periodic UI refreshes
         if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Combat Session Started: ", self.session_count, '\n')
         return self.combat_session_data[-1]
     def check_session(self, timestamp):
@@ -112,7 +122,7 @@ class Parser(QObject):
             # print('     Checking Session: ', self.session_count, ' With a duration of ', self.session[-1].get_duration(), ' seconds')
             chk_time = timestamp - self.combat_session_data[-1].end_time
             # print(' Time since last activity in session: ', chk_time, ' seconds')
-            if chk_time > self.COMBAT_SESSION_TIMEOUT:
+            if chk_time > Globals.COMBAT_SESSION_TIMEOUT:
                 return -1 # Session over timeout
             else:
                 return 1 # Session still active and valid
@@ -123,12 +133,14 @@ class Parser(QObject):
         self.combat_session_live = False
         self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
         if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
+        if self.monitoring_live: self.final_update = True
     def remove_last_session(self):
         '''Removes the current combat session'''
         if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
         self.combat_session_data.pop()
         self.session_count -= 1
         self.combat_session_live = False
+        if self.monitoring_live: self.final_update = True
         
     def update_session_time(self, timestamp):
         '''Updates the current combat session time'''
@@ -449,85 +461,94 @@ class Parser(QObject):
         self.sig_finished.emit(self.combat_session_data)
         return True
     
+    @pyqtSlot()
     def process_live_log(self, file_path):
-        '''Opens the file path and monitors the file for new entries until terminated. 
-        This will not process any existing entries in the log file'''
-
+        if Globals.CONSOLE_VERBOSITY >= 3: print("Inside method process_live_log, with file_path: ", file_path, '\n')
         # Check if the file path is valid
         if not self.is_valid_file_path(file_path):
             return False
         self.set_log_file(file_path)
-
         self.clean_variables()
-
-
         self.set_player_name(self.find_player_name())
 
-        def monitoring_routine():
-            heartbeat = 0
-            while self.monitoring_live:
-                line = file.readline()
-                if not line:
-                    heartbeat += 1
-                    time.sleep(0.01)
-                    continue
-                event, data = self.extract_from_line(line)
-                self.line_count += 1
-                if event != "":
-                    if Globals.CONSOLE_VERBOSITY == 4: print(event, data)
-                    self.interpret_event(event, data)
-                    self.live_log_interval_update()
-                    heartbeat = 0
-                elif heartbeat > 100:
-                    event, data = self.extract_datetime_from_line(line)
-                    # TODO: Call a function to update DPS and other values
-                    self.interpret_event(event, data)
-                    self.live_log_interval_update()
-                    heartbeat = 0
-                else:
-                    heartbeat += 1
-                    time.sleep(0.01)
-                    continue
-            
-            print('          Monitoring Terminated')
-            self.sig_finished.emit(self.combat_session_data)
 
+        self.monitoring_timer.timeout.connect(self.monitoring_loop)
+        self.monitoring_timer.setInterval(10)
+        self.monitoring_timer.start()  # Adjust the interval (in milliseconds) as needed
+        self.monitoring_live = True
+        if Globals.CONSOLE_VERBOSITY >= 3: 
+            print("monitoring_log timer started:", self.monitoring_timer.isActive(),"|", self.monitoring_timer.interval(), "ms interval")
+            # print out the status of the event loop to confirm operation
 
-        with open(self.LOG_FILE_PATH, 'a+') as file:
-            file.seek(0, 2)  # Move the file pointer to the end of the file
-            print('          Monitoring Log File: ', self.LOG_FILE_PATH)
-            self.monitoring_live = True
-            monitoring_routine()
+        self.log_file = open(self.LOG_FILE_PATH, 'r', encoding='utf-8')
+        self.log_file.seek(0, 2)
+        
+    def monitoring_loop(self):
+
+        file = self.log_file
+        line = file.readline()
+        if not line: return
+        event, data = self.extract_from_line(line)
+        self.line_count += 1
+        if event != "":
+            if Globals.CONSOLE_VERBOSITY == 4: print(event, data)
+            self.interpret_event(event, data)
+        else:
+            event, data = self.extract_datetime_from_line(line)
+            self.interpret_event(event, data)
 
     def live_log_interval_update(self):
         '''Calls a recalculation of the current combat session and updates the UI'''
         # if not CLI_MODE: return
         if not (self.monitoring_live and self.combat_session_live):
-            print('ERROR     No active combat session')
-            return
-
+            if not self.final_update:
+                print('WARNING     No active combat session')
+                return
+            else:
+                if Globals.CONSOLE_VERBOSITY >= 2: print('          Sending last session update...')
+                self.interval_timer.stop()
+                self.final_update = False
+        
         with QMutexLocker(self.mutex):
-            try:
-                session = self.combat_session_data[-1]
-                duration = session.get_duration()
-                dps = session.get_dps()
-                acc = session.chars[self.PLAYER_NAME].get_accuracy()
+            if self.combat_session_data == []:
+                session = []
+            else:
+                try:
+                    session = self.combat_session_data[-1]
+                    duration = session.get_duration()
+                    dps = session.get_dps()
+                    acc = session.chars[self.PLAYER_NAME].get_accuracy()
 
-                if duration > 0 and session.get_total_damage() == 0:
-                    session.set_start_time(self.GLOBAL_CURRENT_TIME)  # Reset the start time if there's still no damage
+                    if duration > 0 and session.get_total_damage() == 0:
+                        session.set_start_time(self.GLOBAL_CURRENT_TIME)  # Reset the start time if there's still no damage
 
-
-            except IndexError:
-                print("WARNING     No combat session found to update")
+                except IndexError:
+                    print("WARNING     No combat session found to update")
+                
+                except KeyError:
+                    print("WARNING     No player found in combat session")
+                
+                except Exception as e:
+                    print("ERROR     getting combat session data: ", e)
             
-            except KeyError:
-                print("WARNING     No player found in combat session") # This exception might get raised in cases where self-damaging abilities
             if CLI_MODE: print(" Combat Session: ", self.session_count, " | Duration: ", duration, "s | DPS: ", dps,
                 " | Acc: ", acc, "%", end='\r')
-            else: self.sig_periodic_update.emit(self.combat_session_data)
+            else: 
+                self.sig_periodic_update.emit(self.combat_session_data)
+
+    def on_interval_timeout(self):
+        '''Reset the timer when the cooldown is over'''
+        self.interval_timedout = False
+        self.interval_timer.stop()
+        self.interval_timer.setInterval(250)
+
 
     def on_sig_stop_monitoring(self):
         '''Stops monitoring the log file'''
+        self.monitoring_timer.stop()
+        print('          Monitoring Ended.')
+        if self.combat_session_live: self.end_current_session()
+        self.sig_finished.emit(self.combat_session_data)
         self.monitoring_live = False
 
     def clean_variables(self):
@@ -548,7 +569,7 @@ class Parser(QObject):
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
 
-        if Globals.CONSOLE_VERBOSITY >= 2: print('          Parser reset...')
+        if Globals.CONSOLE_VERBOSITY >= 2: print('          Parser variables cleaned...')
         
 class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
@@ -986,6 +1007,8 @@ if __name__ == "__main__":
 
     #PLAYER_NAME = "Emet Selch"
     self = Parser()
+    #run application
+
     
     self.line_count = 0
     CLI_MODE = True

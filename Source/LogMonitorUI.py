@@ -8,22 +8,28 @@ import random
 import os.path
 
 class ParserThread(QThread):
-    def __init__(self, file_path: str, live: bool):
+    sig_process_live_log = pyqtSignal(str)
+    sig_process_existing_log = pyqtSignal(str)
+    def __init__(self, file_path : str,live: bool):
         super().__init__()
         self.file_path = file_path
         self.live = live
-        self.parser = Parser()
+        self.parser = Parser(self)
+        if Globals.CONSOLE_VERBOSITY >= 3: print("Parser Initialized")
+        self.sig_process_live_log.connect(lambda: self.parser.process_live_log(self.file_path))
+        self.sig_process_existing_log.connect(lambda: self.parser.process_existing_log(self.file_path))
 
     def run(self):
         if self.live:
-            self.parser.process_live_log(self.file_path)
+            self.sig_process_live_log.emit(self.file_path)
+            if Globals.CONSOLE_VERBOSITY >= 3: print("Emitted Signal: Processing Live Log, with file path: ", self.file_path)
         else:
-            self.parser.process_existing_log(self.file_path)
+            self.sig_process_existing_log.emit(self.file_path)
+            if Globals.CONSOLE_VERBOSITY >= 3: print("Emitted Signal: Process Existing Log")
         
 
 class LogMonitorUI(QMainWindow):
     selected_session = None
-    parser = None
     monitoring_live = False
     combat_session_data = []
     parser_thread = QThread()
@@ -31,6 +37,7 @@ class LogMonitorUI(QMainWindow):
     sig_stop_monitoring = pyqtSignal()
     sig_run = pyqtSignal(str)
     sig_run_live = pyqtSignal(str)
+    mutex = QMutex()
     # sig_terminate_processing = pyqtSignal()
     settings = QSettings("dorematt", "coh-combat-parser")
     last_file_path = settings.value("last_file_path", "", type=str)
@@ -133,14 +140,6 @@ class LogMonitorUI(QMainWindow):
         self.settings.setValue("last_file_path", file_path)
         self.unlock_ui()
 
-    def start_parse_thread(self):
-        '''To be replaced by start_worker_thread once working...'''
-        self.parser.sig_finished.connect(self.on_parser_finished)
-        self.parser.sig_periodic_update.connect(self.on_sig_periodic_update)
-        self.parser.moveToThread(self.parser_thread)
-        self.parser_thread.start()
-        print("Parser Thread Started: ", self.parser_thread.isRunning())
-
     def start_worker_thread(self, file_path: str, live: bool):
         
         print("Starting Worker Thread...")
@@ -164,8 +163,6 @@ class LogMonitorUI(QMainWindow):
             self.start_stop_button.setEnabled(True)
             self.monitoring_live = True
             self.start_worker_thread(file_path, True)
-            # self.parser_thread.started.connect(lambda: self.parser.process_live_log(file_path))
-            #self.start_parse_thread()
             self.ability_tree_display.clear()
             self.combat_session_tree.clear()
 
@@ -188,68 +185,56 @@ class LogMonitorUI(QMainWindow):
             #Lock UI
             self.process_button.setText("Processing...")
             self.lock_ui()
-            # self.process_button.setEnabled(True)
-            # self.parser_thread.started.connect(lambda: self.parser.process_existing_log(file_path))
-            #self.start_parse_thread()
             self.start_worker_thread(file_path, False)
             self.ability_tree_display.clear()
             self.combat_session_tree.clear()
-            #self.WorkerThread.run_existing(file_path)
-            #self.sig_run.emit()
-            
 
         elif self.process_button.text == ("Stop Processing"):
             print("Terminating Parser Processing...")
-            # self.parser_thread.quit()
-            # self.WorkerThread.terminate()
             self.sig_stop_monitoring.emit()
             self.unlock_ui()
             self.process_button.setText("Process Existing Log")
 
-   # @pyqtSlot()
-    def on_parser_finished(self):
-        self.parser_thread.quit()
-        print("Parser Thread Quit")
-        self.unlock_ui()
-        self.process_button.setText("Process Existing Log")
-        with QMutexLocker(self.parser.mutex):
-            self.repopulate_sessions(self.parser.combat_session_data)
-            self.selected_session = self.parser.combat_session_data[-1]
-            self.repopulate(self.selected_session)
 
     def on_worker_finished(self, data):
-        self.combat_session_data = data
-        self.sig_run.disconnect
-        self.WorkerThread.parser.sig_finished.disconnect
-        self.WorkerThread.parser.sig_periodic_update.disconnect
-        self.WorkerThread.quit()
-        print("Worker Thread Quit")
-        self.unlock_ui()
-        self.process_button.setText("Process Existing Log")
-        if self.combat_session_data != []:
-            self.repopulate_sessions(self.combat_session_data)
-            self.selected_session = self.combat_session_data[-1]
-            self.repopulate(self.selected_session)
+        with QMutexLocker(self.mutex):
+            self.combat_session_data = data
+            self.sig_run.disconnect
+            self.WorkerThread.parser.sig_finished.disconnect
+            self.WorkerThread.parser.sig_periodic_update.disconnect
+            self.WorkerThread.quit()
+            print("Worker Thread Quit")
+            self.unlock_ui()
+            self.process_button.setText("Process Existing Log")
+            if self.combat_session_data != []:
+                self.selected_session = self.combat_session_data[-1]
+                self.repopulate_sessions(self.combat_session_data)
+                self.repopulate(self.selected_session)
 
     @pyqtSlot()
     def on_sig_periodic_update(self, data):
-        self.combat_session_data = data
-        self.repopulate_sessions(self.combat_session_data)
-
-        self.selected_session = self.combat_session_data[-1]
-        self.repopulate(self.selected_session)
+        with QMutexLocker(self.mutex):
+            self.combat_session_data = data
+            if data == [] or self.combat_session_data is None:
+                self.selected_session = []
+            else:
+                self.selected_session = self.combat_session_data[-1]
+            self.repopulate_sessions(self.combat_session_data)
+            self.repopulate(self.selected_session)
         
     def on_session_selection_change(self):
         '''Handles the event when a combat session is selected in the treeWidget'''
         if self.combat_session_tree.selectedItems():
-            selected_index= self.combat_session_tree.selectedIndexes()[0].row()
-            self.selected_session = self.combat_session_data[selected_index]
-            self.repopulate(self.selected_session)
+            with QMutexLocker(self.mutex):
+                selected_index= self.combat_session_tree.selectedIndexes()[0].row()
+                self.selected_session = self.combat_session_data[selected_index]
+                self.repopulate(self.selected_session)
 
     def repopulate_sessions(self, combat_session_list: list):
-        '''Populates the treeWidget with data from the provided list of combat sessions'''
+        '''Populates the treeWidget with data from the provided list of combat sessions. This should only be called while under a mutex lock'''
         # Clear the treeWidget
         self.combat_session_tree.clear()
+        if combat_session_list == []: return
         for session, combat_session in enumerate(combat_session_list, start=1):
             session_item = QTreeWidgetItem(self.combat_session_tree, [str(session)])
             session_item.setText(1, str(combat_session.duration) + "s")
@@ -258,6 +243,7 @@ class LogMonitorUI(QMainWindow):
             session_item.setText(4, "{:,}".format(combat_session.get_inf()))
 
     def repopulate(self, session):
+        '''Populates the ability tree with data from the provided combat session. This should only be called while under a mutex lock'''
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
             for i in range(8):
                 item.setFont(i, QFont("Arial", font_size, QFont.Bold if is_bold else QFont.Normal))
@@ -321,7 +307,7 @@ class LogMonitorUI(QMainWindow):
         self.ability_tree_display.clear()
 
         # Repopulate the treeWidget
-        if session is None:
+        if session is None or session == []:
             return
 
         duration = session.duration
@@ -424,9 +410,10 @@ class LogMonitorUI(QMainWindow):
 
         # Call the function to set up test data
         setup_test_data()
-        self.combat_session_data = test_sessions
-        # Populate the tree with test data
-        self.repopulate_sessions(self.combat_session_data)
+        with QMutexLocker(self.mutex):
+            self.combat_session_data = test_sessions
+            # Populate the tree with test data
+            self.repopulate_sessions(self.combat_session_data)
 
 
 if __name__ == "__main__":
