@@ -1,63 +1,63 @@
-import re
-import os
+from re import compile
+import os.path
 import time
 from datetime import datetime
 import random
 from tkinter import filedialog as tk
 import sys
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QThread
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QCoreApplication
 from CoH_Parser import Globals
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
 class Parser(QObject):
     '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
     PATTERNS = {
-        "player_ability_activate": re.compile(
+        "player_ability_activate": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You activated the (?P<ability>.+?) power\."
         ),
-        "player_hit_roll": re.compile(
+        "player_hit_roll": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
-        "player_pet_hit_roll": re.compile(
+        "player_pet_hit_roll": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
-        "player_damage": re.compile(
+        "player_damage": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
         ),
-        "player_pet_damage": re.compile(
+        "player_pet_damage": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>[\w\s]+))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: over time)?\.*"
         ),
-       # "foe_hit_roll": re.compile(
+       # "foe_hit_roll": compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
        # ),
-       # "foe_damage": re.compile(
+       # "foe_damage": compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) hits you with their (?P<ability>.+?) for (?P<damage_value>[\d.]+) points of (?P<damage_type>\w+) damage\.*"
        # ),
-        "reward_gain_both": re.compile(
+        "reward_gain_both": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d{1,3}(,\d{3})*(\.\d+)?) experience and (?P<inf_value>\d{1,3}(,\d{3})*(\.\d+)?) (?:influence|information|infamy)\.*"
         ),
-        "reward_gain_exp": re.compile(
+        "reward_gain_exp": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d+(,\d{3})*|\d+) experience\."
         ),
-        "reward_gain_inf": re.compile(
+        "reward_gain_inf": compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<inf_value>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
         ),
-       # "influence_gain": re.compile(
+       # "influence_gain": compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) .*? and (?P<inf_value>\d+) (influence|infamy|information)\.*"
        # ),
-       # "healing": re.compile(
+       # "healing": compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<healer>.+?) (?:heals|heal) (?:you|PLAYER_NAME) with their (?P<ability>.+?) for (?P<healing_value>[\d.]+) health points(?: over time)?\.*"
        # ),
         # This pattern should capture endurance recovery. An example line for endurance recovery is needed to refine this pattern.
-       # "endurance_recovery": re.compile(
+       # "endurance_recovery": compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<restorer>.+?) (?:restores|restore) (?:your|PLAYER_NAME's) endurance by (?P<endurance_value>[\d.]+) points\.*"
        # ),
-        "player_name": re.compile( # Matches a welcome message that includes the player name
+        "player_name": compile( # Matches a welcome message that includes the player name
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
         ),
     }
     PATTERN_DATETIME = {
-        "date_time": re.compile(
+        "date_time": compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2})"
         )
     }
@@ -65,6 +65,7 @@ class Parser(QObject):
     log_file = None
     PLAYER_NAME = ""# Seconds, determines how long to wait between  # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
+    processing_live = False # Flag to indicate when processing is active (or used to terminate processing)
     combat_session_data = [] # Stores a list of combat sessions
     mutex = QMutex()
     sig_finished = pyqtSignal(list)
@@ -88,7 +89,7 @@ class Parser(QObject):
         updated_patterns = {}
         for key, regex in self.PATTERNS.items():
             updated_pattern = regex.pattern.replace('PLAYER_NAME', player_name)
-            updated_regex = re.compile(updated_pattern)
+            updated_regex = compile(updated_pattern)
             if Globals.CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
             updated_patterns[key] = updated_regex
         return updated_patterns
@@ -450,12 +451,19 @@ class Parser(QObject):
         
         #Open file and iterate through each line
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
+            refresher = 0
+            self.processing_live = True
             for line in file:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
+                refresher += 1
                 if event != "":
                     if Globals.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
+                if refresher > 500:
+                    refresher = 0
+                    QCoreApplication.processEvents()
+                    if not self.processing_live: break
         if CLI_MODE: _test_show_results()
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
         self.sig_finished.emit(self.combat_session_data)
@@ -517,7 +525,7 @@ class Parser(QObject):
                     session = self.combat_session_data[-1]
                     duration = session.get_duration()
                     dps = session.get_dps()
-                    acc = session.chars[self.PLAYER_NAME].get_accuracy()
+                    #acc = session.chars[self.PLAYER_NAME].get_accuracy()
 
                     if duration > 0 and session.get_total_damage() == 0:
                         session.set_start_time(self.GLOBAL_CURRENT_TIME)  # Reset the start time if there's still no damage
@@ -548,8 +556,9 @@ class Parser(QObject):
         self.monitoring_timer.stop()
         print('          Monitoring Ended.')
         if self.combat_session_live: self.end_current_session()
-        self.sig_finished.emit(self.combat_session_data)
         self.monitoring_live = False
+        self.processing_live = False
+        self.sig_finished.emit(self.combat_session_data)
 
     def clean_variables(self):
         '''Reset all'''
@@ -570,7 +579,7 @@ class Parser(QObject):
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
 
         if Globals.CONSOLE_VERBOSITY >= 2: print('          Parser variables cleaned...')
-        
+    
 class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
     CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.''' 

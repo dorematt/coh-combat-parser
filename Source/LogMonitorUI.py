@@ -22,10 +22,10 @@ class ParserThread(QThread):
     def run(self):
         if self.live:
             self.sig_process_live_log.emit(self.file_path)
-            if Globals.CONSOLE_VERBOSITY >= 3: print("Emitted Signal: Processing Live Log, with file path: ", self.file_path)
+            ("Emitted Signal: Processing Live Log, with file path: ", self.file_path)
         else:
             self.sig_process_existing_log.emit(self.file_path)
-            if Globals.CONSOLE_VERBOSITY >= 3: print("Emitted Signal: Process Existing Log")
+            print("Emitted Signal: Process Existing Log")
         
 
 class LogMonitorUI(QMainWindow):
@@ -183,16 +183,17 @@ class LogMonitorUI(QMainWindow):
         if self.process_button.text() == "Process Existing Log":
             
             #Lock UI
-            self.process_button.setText("Processing...")
+            self.process_button.setText("Stop Processing")
             self.lock_ui()
             self.start_worker_thread(file_path, False)
             self.ability_tree_display.clear()
             self.combat_session_tree.clear()
+            self.process_button.setEnabled(True)
 
-        elif self.process_button.text == ("Stop Processing"):
+        else:
             print("Terminating Parser Processing...")
+            self.process_button.setEnabled(False)
             self.sig_stop_monitoring.emit()
-            self.unlock_ui()
             self.process_button.setText("Process Existing Log")
 
 
