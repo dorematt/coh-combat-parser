@@ -73,7 +73,7 @@ class LogMonitorUI(QMainWindow):
             self.ability_tree_display.setSortingEnabled(True)
 
             self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total"])
-            self.ability_tree_display.setColumnWidth(0, 250)
+            self.ability_tree_display.setColumnWidth(0, 275)
             self.ability_tree_display.setColumnWidth(1, 75)
             self.ability_tree_display.setColumnWidth(2, 75)
             self.ability_tree_display.setColumnWidth(3, 100)
@@ -89,7 +89,7 @@ class LogMonitorUI(QMainWindow):
             # Combat Session Tree
             self.combat_session_tree = QTreeWidget()
             self.combat_session_tree.setHeaderLabels(["Session", "Duration","DPS", "EXP", "Inf"])
-            self.combat_session_tree.setColumnWidth(0, 100)
+            self.combat_session_tree.setColumnWidth(0, 150)
             self.combat_session_tree.setColumnWidth(1, 75)
             self.combat_session_tree.setColumnWidth(2, 75)
             self.combat_session_tree.setColumnWidth(3, 80)
@@ -97,7 +97,7 @@ class LogMonitorUI(QMainWindow):
             self.combat_session_tree.setSelectionMode(QTreeWidget.SingleSelection)
             self.combat_session_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.combat_session_tree.setMinimumWidth(250)
-            self.combat_session_tree.setMaximumWidth(420)
+            self.combat_session_tree.setMaximumWidth(500)
 
             self.combat_session_tree.itemSelectionChanged.connect(self.on_session_selection_change)
         def setup_layout():
@@ -237,7 +237,8 @@ class LogMonitorUI(QMainWindow):
         self.combat_session_tree.clear()
         if combat_session_list == []: return
         for session, combat_session in enumerate(combat_session_list, start=1):
-            session_item = QTreeWidgetItem(self.combat_session_tree, [str(session)])
+            session_name = combat_session_list[session-1].get_name()
+            session_item = QTreeWidgetItem(self.combat_session_tree, [session_name])
             session_item.setText(1, str(combat_session.duration) + "s")
             session_item.setText(2, str(combat_session.get_dps()))
             session_item.setText(3, "{:,}".format(combat_session.get_exp()))

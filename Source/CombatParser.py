@@ -55,6 +55,9 @@ class Parser(QObject):
         "player_name": compile( # Matches a welcome message that includes the player name
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
         ),
+        "command": compile( # Matches a command message in chat
+        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) \[Local\] (?P<player>.+?): .*?##(?P<command>\S+) (?P<value>.*)"
+        ),
     }
     PATTERN_DATETIME = {
         "date_time": compile(
@@ -72,6 +75,7 @@ class Parser(QObject):
     sig_periodic_update = pyqtSignal(list)
     parentThread = None
     final_update = False # Flag to indicate if a final update is required
+    user_session_name = ""
 
     def __init__(self, parent=None):
         super().__init__()
@@ -111,7 +115,13 @@ class Parser(QObject):
 
     def new_session(self, timestamp):
         self.session_count += 1
-        self.combat_session_data.append(CombatSession(timestamp))
+        if self.user_session_name == "": 
+            self.session_name_count +=1
+            name = str(self.session_name_count)
+        else:
+            self.session_name_count += 1
+            name =self.user_session_name + " " + str(self.session_name_count)
+        self.combat_session_data.append(CombatSession(timestamp,name))
         self.combat_session_live = True
         if self.monitoring_live: self.interval_timer.start() # Begins periodic UI refreshes
         if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Combat Session Started: ", self.session_count, '\n')
@@ -140,6 +150,7 @@ class Parser(QObject):
         if Globals.CONSOLE_VERBOSITY >= 2: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
         self.combat_session_data.pop()
         self.session_count -= 1
+        self.session_name_count -= 1
         self.combat_session_live = False
         if self.monitoring_live: self.final_update = True
         
@@ -149,7 +160,7 @@ class Parser(QObject):
     def print_session_results(self, session):
         '''Displays the results of the current combat session'''
         if not CLI_MODE: 
-            print("              Combat Session ", self.session_count, ", ", session.get_duration(), "s duration processed.", sep="")
+            print("              Combat Session: ", self.combat_session_data[-1].name, ", ", session.get_duration(), "s duration processed.", sep="")
             return
         
         print('\n', '\n') 
@@ -242,6 +253,12 @@ class Parser(QObject):
                 self.set_player_name(data["player_name"])
                 self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
             
+            elif event == "command":
+                if self.PLAYER_NAME == "": 
+                    self.set_player_name(self.find_player_name())
+                if data["player"] != self.PLAYER_NAME: # Make sure the command is from the player
+                    return
+                self.handle_event_command(data)
 
     def handle_event_player_power_activate(self, data):
 
@@ -356,6 +373,16 @@ class Parser(QObject):
         if self.combat_session_live:
             self.combat_session_data[-1].add_exp(exp_value)
             self.combat_session_data[-1].add_inf(inf_value)
+
+    def handle_event_command(self, data):
+        if data["command"] == "SESSION_NAME":
+            self.user_session_name = data["value"]
+            self.session_name_count = 0
+            if Globals.CONSOLE_VERBOSITY >= 2 or self.monitoring_live: print ("          Setting Session Name to: ", self.user_session_name, '\n')
+            if self.combat_session_live:
+                self.session_name_count += 1
+                self.combat_session_data[-1].set_name(data["value"] + " " + str(self.session_name_count))
+                if self.monitoring_live: print ("Updated Active Combat Session Name: ", self.combat_session_data[-1].get_name(), '\n')
 
     def convert_timestamp(self, date, time):
         '''Converts a timestamp from the log file into a datetime object and returns an int representing the time in seconds'''
@@ -563,6 +590,7 @@ class Parser(QObject):
         self.line_count = 0
         self.combat_session_data = [] # Stores a list of combat sessions
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
+        self.session_name_count = 0 # For counting the number of sessions with the same name
         self.combat_session_live = False # Flag to indicate if a combat session is active
         self.global_combat_duration = 0 # Stores the total durations of all combat sessions
 
@@ -575,13 +603,15 @@ class Parser(QObject):
         self.abilities = {} # Stores a list of abilities
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
+        final_update = False # Flag to indicate if a final update is required
+        user_session_name = ""
 
         if Globals.CONSOLE_VERBOSITY >= 2: print('          Parser variables cleaned...')
     
 class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
     CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.''' 
-    def __init__(self, timestamp=0):
+    def __init__(self, timestamp=0, name=""):
         super().__init__()
         self.start_time = timestamp
         self.end_time = timestamp
@@ -589,18 +619,23 @@ class CombatSession(QObject):
         self.chars = {} # Stores a list of characters
         self.exp_value = 0
         self.inf_value = 0
+        self.name = name
         
 
     def set_start_time(self, start_time):
         self.start_time = start_time
     def set_end_time(self, end_time):
         self.end_time = end_time
+    def set_name(self, name):
+        self.name = name
     def update_duration(self):
         self.duration = self.end_time - self.start_time
     def update_session_time(self, timestamp):
         self.end_time = timestamp
         self.update_duration()
 
+    def get_name(self):
+        return self.name
     def get_duration(self):
         self.update_duration()
         return self.duration
