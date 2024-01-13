@@ -4,7 +4,7 @@ class Globals:
     BUILD_TYPE = "ALPHA"
     AUTHOR = "@10kVolts"
     CONTRIBUTORS = []
-    CONSOLE_VERBOSITY = 1
+    CONSOLE_VERBOSITY = 4
     COMBAT_SESSION_TIMEOUT = 15
 
 def main():
