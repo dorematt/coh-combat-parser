@@ -4,12 +4,12 @@ class Globals:
     BUILD_TYPE = "ALPHA"
     AUTHOR = "@10kVolts"
     CONTRIBUTORS = []
-    CONSOLE_VERBOSITY = 4
+    CONSOLE_VERBOSITY = 1
     COMBAT_SESSION_TIMEOUT = 15
 
 def main():
-    from LogMonitorUI import LogMonitorUI
-    from CombatParser import Parser
+    from ui.MainUI import MainUI
+    from combat.CombatParser import Parser
     from PyQt5.QtWidgets import QApplication
     import sys
 
@@ -31,7 +31,7 @@ def main():
     preamble()
 
     app = QApplication(sys.argv)
-    main_ui = LogMonitorUI()
+    main_ui = MainUI()
 
     main_ui.show()
 

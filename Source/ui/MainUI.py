@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QGridLayout, QWidget, QFileDialog, QHBoxLayout
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
-from CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
+from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
 from CoH_Parser import Globals
 import random
 import os.path
@@ -28,7 +28,7 @@ class ParserThread(QThread):
             print("Emitted Signal: Process Existing Log")
         
 
-class LogMonitorUI(QMainWindow):
+class MainUI(QMainWindow):
     selected_session = None
     monitoring_live = False
     combat_session_data = []
@@ -72,7 +72,7 @@ class LogMonitorUI(QMainWindow):
             self.ability_tree_display = QTreeWidget()
             self.ability_tree_display.setSortingEnabled(True)
 
-            self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total"])
+            self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total", "Hits", "Tries"])
             self.ability_tree_display.setColumnWidth(0, 275)
             self.ability_tree_display.setColumnWidth(1, 75)
             self.ability_tree_display.setColumnWidth(2, 75)
@@ -81,6 +81,8 @@ class LogMonitorUI(QMainWindow):
             self.ability_tree_display.setColumnWidth(5, 75)
             self.ability_tree_display.setColumnWidth(6, 75)
             self.ability_tree_display.setColumnWidth(7, 75)
+            self.ability_tree_display.setColumnWidth(8, 75)
+            self.ability_tree_display.setColumnWidth(9, 75)
             self.ability_tree_display.setMinimumWidth(500)
 
             # Set the default sort column to DPS
@@ -277,12 +279,16 @@ class LogMonitorUI(QMainWindow):
             ability_item.setData(5, Qt.DisplayRole, "{:,}".format(ability.get_max_damage()))
             ability_item.setData(6, Qt.DisplayRole, "{:,}".format(ability.get_min_damage()))
             ability_item.setData(7, Qt.DisplayRole, "{:,}".format(ability.get_total_damage()))
+            ability_item.setData(8, Qt.DisplayRole, "{:,}".format(ability.get_hits()))
+            ability_item.setData(9, Qt.DisplayRole, "{:,}".format(ability.get_tries()))
 
             ability_item.setTextAlignment(2, Qt.AlignCenter)
             ability_item.setTextAlignment(3, Qt.AlignCenter)
             ability_item.setTextAlignment(4, Qt.AlignCenter)
             ability_item.setTextAlignment(5, Qt.AlignCenter)
             ability_item.setTextAlignment(6, Qt.AlignCenter)
+            ability_item.setTextAlignment(7, Qt.AlignCenter)
+            ability_item.setTextAlignment(8, Qt.AlignCenter)
 
             return ability_item
 
@@ -421,6 +427,6 @@ class LogMonitorUI(QMainWindow):
 if __name__ == "__main__":
     # Create the UI
     app = QApplication(sys.argv)
-    ui = LogMonitorUI(parser=Parser())
+    ui = MainUI(parser=Parser())
     ui.show()
     sys.exit(app.exec_())
