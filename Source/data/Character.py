@@ -50,6 +50,22 @@ class Character(QObject):
         if tries == 0: return 0
         return round((hits / tries) * 100,2)
     
+    def get_hits(self):
+        '''Returns the number of times the character has hit'''
+        hits = 0
+        if self.abilities == {}: return hits
+        for ability in self.abilities:
+            hits += self.abilities[ability].get_hits()
+        return hits
+    
+    def get_tries(self):
+        '''Returns the number of times the character has been used'''
+        tries = 0
+        if self.abilities == {}: return tries
+        for ability in self.abilities:
+            tries += self.abilities[ability].get_tries()
+        return tries
+    
     def get_dps(self, duration):
         '''Calculates the DPS for the character based off of the damage components'''
         dps = 0

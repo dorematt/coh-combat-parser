@@ -249,7 +249,7 @@ class MainUI(QMainWindow):
     def repopulate(self, session):
         '''Populates the ability tree with data from the provided combat session. This should only be called while under a mutex lock'''
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
-            for i in range(8):
+            for i in range(10):
                 item.setFont(i, QFont("Arial", font_size, QFont.Bold if is_bold else QFont.Normal))
                 if background_color:
                     item.setBackground(i, background_color)
@@ -261,12 +261,16 @@ class MainUI(QMainWindow):
             character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
             character_item.setData(3, Qt.DisplayRole, "{:,}".format(character.get_average_damage()))
             character_item.setData(7, Qt.DisplayRole, "{:,}".format(character.get_total_damage()))
+            character_item.setData(8, Qt.DisplayRole, "{:,}".format(character.get_hits()))
+            character_item.setData(9, Qt.DisplayRole, "{:,}".format(character.get_tries()))
 
             character_item.setTextAlignment(2, Qt.AlignCenter)
             character_item.setTextAlignment(3, Qt.AlignCenter)
             character_item.setTextAlignment(4, Qt.AlignCenter)
             character_item.setTextAlignment(5, Qt.AlignCenter)
             character_item.setTextAlignment(6, Qt.AlignCenter)
+            character_item.setTextAlignment(7, Qt.AlignCenter)
+            character_item.setTextAlignment(8, Qt.AlignCenter)
 
             return character_item
 
