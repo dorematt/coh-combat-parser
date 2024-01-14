@@ -346,7 +346,7 @@ class MainUI(QMainWindow):
 
     def open_settings_window(self):
         self.settings_window = SettingsWindow()
-        self.settings_window.show()
+        self.settings_window.exec_()
 
     def error(self, message, title = "Error"):
         error_box = QMessageBox()
@@ -363,12 +363,14 @@ class MainUI(QMainWindow):
         self.file_path_var.setEnabled(False)
         self.browse_button.setEnabled(False)
         self.run_test_button.setEnabled(False)
+        self.settings_button.setEnabled(False)
     def unlock_ui(self):
         self.start_stop_button.setEnabled(True)
         self.process_button.setEnabled(True)
         self.file_path_var.setEnabled(True)
         self.browse_button.setEnabled(True)
         self.run_test_button.setEnabled(True)
+        self.settings_button.setEnabled(True)
     def check_file_path_valid(self, file_path: str) -> bool:
         file_path = self.file_path_var.text()
         if file_path == "":

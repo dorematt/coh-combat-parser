@@ -7,6 +7,12 @@ class Globals:
     CONTRIBUTORS = []
 
 
+    DEFAULT_COMBAT_SESSION_TIMEOUT = 15
+    DEFAULT_COMBAT_SESSION_NAME = "Session"
+    DEFAULT_ASSOCIATE_PROCS_TO_POWERS = True
+    DEFAULT_CONSOLE_VERBOSITY = 1
+
+
 def main():
     from ui.MainUI import MainUI
     from combat.CombatParser import Parser
