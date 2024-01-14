@@ -326,6 +326,9 @@ class Parser(QObject):
         # Ignore events where the player hits themselves
         if data["target"] == self.PLAYER_NAME:
             return
+        
+        if data["damage_flair"] is None: 
+            data["damage_flair"] = ""
 
         # determine if this is a pet or the player damage event
         search_ability = data["ability"]
@@ -336,7 +339,7 @@ class Parser(QObject):
 
         # Create or get the ability and update damage
         active_ability = self.abilities.setdefault(search_ability, Ability(search_ability, None, True))
-        active_ability.add_damage(DamageComponent(data["damage_type"]),float( data["damage_value"]))
+        active_ability.add_damage(DamageComponent(data["damage_type"] + " " + data["damage_flair"]),float( data["damage_value"]))
 
         # Check and update the session's character list
         session = self.combat_session_data[-1]
@@ -356,7 +359,7 @@ class Parser(QObject):
         ability = char.get_ability(search_ability)
         if Globals.CONSOLE_VERBOSITY >= 3: 
                 print( '------------- ', ability.name)
-        ability.add_damage(DamageComponent(data["damage_type"]), float(data["damage_value"]))
+        ability.add_damage(DamageComponent(data["damage_type"] + " " + data["damage_flair"]), float(data["damage_value"]))
         if Globals.CONSOLE_VERBOSITY >= 3: 
                 print ('         Damage Component Added: ', ability.damage[-1].type, ability.damage[-1].total_damage, 'Count: ', ability.damage[-1].count)
   
