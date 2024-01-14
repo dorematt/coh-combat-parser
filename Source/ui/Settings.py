@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QSpinBox, QLineEdit, QVBoxLayout, QWidget, QPushButton, QCheckBox, QHBoxLayout
 from PyQt5.QtCore import QSettings
-from CoH_Parser import Globals
+from data.Globals import Globals
 
 
 

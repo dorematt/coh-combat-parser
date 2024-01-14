@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow,
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
 from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
-from CoH_Parser import Globals
+from data.Globals import Globals
 import random
 from ui.Settings import SettingsWindow
 import os.path

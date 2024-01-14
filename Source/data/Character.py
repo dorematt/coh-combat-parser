@@ -7,6 +7,7 @@ class Character(QObject):
         self.name = name
         self.abilities = {}
         self.is_pet = False
+        self.last_ability = None # For the purposes of associating proc to powers
 
     def add_ability(self, ability_name, ability):
         self.abilities[ability_name] = ability

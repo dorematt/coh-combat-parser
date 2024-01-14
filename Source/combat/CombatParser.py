@@ -1,4 +1,4 @@
-from re import compile
+import re
 import os.path
 import time
 from datetime import datetime
@@ -6,65 +6,63 @@ from data.Ability import Ability
 from data.Character import Character
 from data.DamageComponent import DamageComponent
 from combat.CombatSession import CombatSession
-from tkinter import filedialog as tk
-import sys
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QCoreApplication, QSettings
-from CoH_Parser import Globals
+from data.Globals import Globals
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
 class Parser(QObject):
     '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
     PATTERNS = {
-        "player_ability_activate": compile(
+        "player_ability_activate": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You activated the (?P<ability>.+?) power\."
         ),
-        "player_hit_roll": compile(
+        "player_hit_roll": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
-        "player_pet_hit_roll": compile(
+        "player_pet_hit_roll": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
         ),
-        "player_damage": compile(
+        "player_damage": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
         ),
-        "player_pet_damage": compile(
+        "player_pet_damage": re.compile(
              r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * You hit (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
         ),
-       # "foe_hit_roll": compile(
+       # "foe_hit_roll": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
        # ),
-       # "foe_damage": compile(
+       # "foe_damage": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) hits you with their (?P<ability>.+?) for (?P<damage_value>[\d.]+) points of (?P<damage_type>\w+) damage\.*"
        # ),
-        "reward_gain_both": compile(
+        "reward_gain_both": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d{1,3}(,\d{3})*(\.\d+)?) experience and (?P<inf_value>\d{1,3}(,\d{3})*(\.\d+)?) (?:influence|information|infamy)\.*"
         ),
-        "reward_gain_exp": compile(
+        "reward_gain_exp": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d+(,\d{3})*|\d+) experience\."
         ),
-        "reward_gain_inf": compile(
+        "reward_gain_inf": re.compile(
             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<inf_value>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
         ),
-       # "influence_gain": compile(
+       # "influence_gain": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) .*? and (?P<inf_value>\d+) (influence|infamy|information)\.*"
        # ),
-       # "healing": compile(
+       # "healing": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<healer>.+?) (?:heals|heal) (?:you|PLAYER_NAME) with their (?P<ability>.+?) for (?P<healing_value>[\d.]+) health points(?: over time)?\.*"
        # ),
         # This pattern should capture endurance recovery. An example line for endurance recovery is needed to refine this pattern.
-       # "endurance_recovery": compile(
+       # "endurance_recovery": re.compile(
        #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<restorer>.+?) (?:restores|restore) (?:your|PLAYER_NAME's) endurance by (?P<endurance_value>[\d.]+) points\.*"
        # ),
-        "player_name": compile( # Matches a welcome message that includes the player name
+        "player_name": re.compile( # Matches a welcome message that includes the player name
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
         ),
-        "command": compile( # Matches a command message in chat
+        "command": re.compile( # Matches a command message in chat
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) \[Local\] (?P<player>.+?): .*?##(?P<command>\S+) (?P<value>.*)"
         ),
     }
     
     PATTERN_DATETIME = {
-        "date_time": compile(
+        "date_time": re.compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2})"
         )
     }
@@ -103,7 +101,6 @@ class Parser(QObject):
         self.session_name_count = 0 # For counting the number of sessions with the same name
         self.combat_session_live = False # Flag to indicate if a combat session is active
         self.global_combat_duration = 0 # Stores the total durations of all combat sessions
-        self.active_ability = None # Stores a reference to the ability that is currently being processed
 
         # Set Exp and Influence values
         self.EXP_VALUE = 0
@@ -124,7 +121,7 @@ class Parser(QObject):
         updated_patterns = {}
         for key, regex in self.PATTERNS.items():
             updated_pattern = regex.pattern.replace('PLAYER_NAME', player_name)
-            updated_regex = compile(updated_pattern)
+            updated_regex = re.compile(updated_pattern)
             if self.CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
             
             updated_patterns[key] = updated_regex
@@ -180,7 +177,6 @@ class Parser(QObject):
         self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
         if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
         if self.monitoring_live: self.final_update = True
-        self.active_ability = None
     def remove_last_session(self):
         '''Removes the current combat session'''
         if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Removed Combat Session: ", self.session_count, '\n')
@@ -189,7 +185,6 @@ class Parser(QObject):
         self.session_name_count -= 1
         self.combat_session_live = False
         if self.monitoring_live: self.final_update = True
-        self.active_ability = None
         
     def update_session_time(self, timestamp):
         '''Updates the current combat session time'''
@@ -317,6 +312,7 @@ class Parser(QObject):
         
         this_ability = player.abilities[this_ability]
         this_ability.ability_used()
+        player.last_ability = this_ability # Setting the active ability here to cover non-damaging abilities with procs attached to them
 
     def handle_event_player_hit_roll(self, data, pet=False):
         '''Handles a player hit roll event, assumes it came from player instead of pet unless pet=True'''
@@ -387,10 +383,6 @@ class Parser(QObject):
         else:
             caster = self.PLAYER_NAME
 
-        # Create or get the ability and update damage
-        # active_ability = self.abilities.setdefault(search_ability, Ability(search_ability, None, True))
-        # active_ability.add_damage(DamageComponent(data["damage_type"] + " " + data["damage_flair"]),float( data["damage_value"]))
-
         # Check and update the session's character list
         this_session = self.combat_session_data[-1]
 
@@ -403,14 +395,14 @@ class Parser(QObject):
         caster = this_session.chars[caster]
         
 
-        if proc and self.active_ability is not None:
+        if proc and caster.last_ability is not None:
             if self.associating_procs:
                 # Add the proc damage to the last used ability
                 if flair != "": 
                     proc_name = (data["ability"] + " " + data["damage_flair"])
                 else:
                     proc_name = data["ability"]
-                self.active_ability.add_damage(DamageComponent(proc_name),damage)
+                caster.last_ability.add_damage(DamageComponent(proc_name),damage)
                 # print('         Damage Proc', proc_name,'Added to ', self.active_ability.name, "with value", damage, "and total damage of:", self.active_ability.get_total_damage(), 'Count: ', self.active_ability.damage[-1].count)
                 return
         
@@ -426,7 +418,7 @@ class Parser(QObject):
         if self.CONSOLE_VERBOSITY >= 3: 
                 print ('         Damage Component Added: ', this_ability.damage[-1].type, this_ability.damage[-1].total_damage, 'Count: ', this_ability.damage[-1].count)
 
-        self.active_ability = this_ability
+        caster.last_ability = this_ability
 
   
     def handle_event_reward_gain(self, data):
@@ -554,7 +546,7 @@ class Parser(QObject):
         
         #Open file and iterate through each line
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
-            refresher = 0
+            refresher = 0 #just keeps the UI responsive
             self.processing_live = True
             for line in file:
                 event, data = self.extract_from_line(line)

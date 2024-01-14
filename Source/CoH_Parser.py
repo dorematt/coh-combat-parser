@@ -1,21 +1,6 @@
-class Globals:
-    VERSION = "0.0.4"
-    BUILD_DATE = "11 Jan 2024"
-    BUILD_TYPE = "ALPHA"
-    AUTHOR = "@10kVolts"
-    APPLICATION_NAME = "coh-combat-parser"
-    CONTRIBUTORS = []
-
-
-    DEFAULT_COMBAT_SESSION_TIMEOUT = 15
-    DEFAULT_COMBAT_SESSION_NAME = "Session"
-    DEFAULT_ASSOCIATE_PROCS_TO_POWERS = True
-    DEFAULT_CONSOLE_VERBOSITY = 1
-
-
 def main():
     from ui.MainUI import MainUI
-    from combat.CombatParser import Parser
+    from data.Globals import Globals
     from PyQt5.QtWidgets import QApplication
     import sys
 
