@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal
 from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
 from CoH_Parser import Globals
 import random
+from ui.Settings import SettingsWindow
 import os.path
 
 class ParserThread(QThread):
@@ -12,10 +13,11 @@ class ParserThread(QThread):
     sig_process_existing_log = pyqtSignal(str)
     def __init__(self, file_path : str,live: bool):
         super().__init__()
+        self.settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
         self.file_path = file_path
         self.live = live
         self.parser = Parser(self)
-        if Globals.CONSOLE_VERBOSITY >= 3: print("Parser Initialized")
+        if self.settings.value("ConsoleVerbosity", 1, int) >= 2: print("Parser Initialized")
         self.sig_process_live_log.connect(lambda: self.parser.process_live_log(self.file_path))
         self.sig_process_existing_log.connect(lambda: self.parser.process_existing_log(self.file_path))
 
@@ -39,7 +41,7 @@ class MainUI(QMainWindow):
     sig_run_live = pyqtSignal(str)
     mutex = QMutex()
     # sig_terminate_processing = pyqtSignal()
-    settings = QSettings("dorematt", "coh-combat-parser")
+    settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
     last_file_path = settings.value("last_file_path", "", type=str)
 
 
@@ -58,8 +60,9 @@ class MainUI(QMainWindow):
             self.overall_dps_var = QLabel("DPS:")
 
             # File path input label and entry
-            self.file_path_label = QLabel("Log File Path:")
+            self.file_path_label = QLabel("Log File Path:",)
             self.browse_button = QPushButton("Browse", clicked=self.browse_file)
+            self.settings_button = QPushButton("Settings", clicked=self.open_settings_window)
 
             # Start/Stop and Process buttons
             self.start_stop_button = QPushButton("Start Log", clicked=self.start_stop_log)
@@ -67,6 +70,8 @@ class MainUI(QMainWindow):
 
             # Run Test button to add test data to the Treeview
             self.run_test_button = QPushButton("Run Test", clicked=self.run_test_log)
+
+
         def define_ability_tree():
             # Main Ability Tree
             self.ability_tree_display = QTreeWidget()
@@ -109,6 +114,7 @@ class MainUI(QMainWindow):
             browse_layout.addWidget(self.file_path_label)
             browse_layout.addWidget(self.file_path_var)
             browse_layout.addWidget(self.browse_button)
+            browse_layout.addWidget(self.settings_button)
 
             button_layout = QHBoxLayout()
             button_layout.addWidget(self.start_stop_button)
@@ -138,8 +144,9 @@ class MainUI(QMainWindow):
     def browse_file(self):
         self.lock_ui()
         file_path, _ = QFileDialog.getOpenFileName(directory=self.last_file_path, filter="Text Files (*.txt)")
-        self.file_path_var.setText(file_path)
-        self.settings.setValue("last_file_path", file_path)
+        if file_path != "":
+            self.file_path_var.setText(file_path)
+            self.settings.setValue("last_file_path", file_path)
         self.unlock_ui()
 
     def start_worker_thread(self, file_path: str, live: bool):
@@ -335,6 +342,11 @@ class MainUI(QMainWindow):
 
         self.ability_tree_display.expandToDepth(0)
         self.ability_tree_display.sortByColumn(current_column, current_order)
+
+
+    def open_settings_window(self):
+        self.settings_window = SettingsWindow()
+        self.settings_window.show()
 
     def error(self, message, title = "Error"):
         error_box = QMessageBox()

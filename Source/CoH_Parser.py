@@ -3,9 +3,9 @@ class Globals:
     BUILD_DATE = "11 Jan 2024"
     BUILD_TYPE = "ALPHA"
     AUTHOR = "@10kVolts"
+    APPLICATION_NAME = "coh-combat-parser"
     CONTRIBUTORS = []
-    CONSOLE_VERBOSITY = 1
-    COMBAT_SESSION_TIMEOUT = 15
+
 
 def main():
     from ui.MainUI import MainUI
