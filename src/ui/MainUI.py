@@ -6,6 +6,7 @@ from combat.CombatParser import Parser, CombatSession, Character, Ability, Damag
 from data.Globals import Globals
 import random
 from ui.Settings import SettingsWindow
+from ui.style.Theme import apply_stylesheet
 import os.path
 
 class ParserThread(QThread):
@@ -134,11 +135,14 @@ class MainUI(QMainWindow):
             central_widget = QWidget()
             central_widget.setLayout(main_layout)
             self.setCentralWidget(central_widget)
-        
+
+
+
         define_main_window()
         define_ability_tree()
         define_combat_session_tree()
         setup_layout()
+        apply_stylesheet(self)
 
         # add window icon
         self.setWindowIcon(QIcon(Globals.ICON_PATH))

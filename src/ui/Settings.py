@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QSpinBox, QLineEdit, 
 from PyQt5.QtCore import QSettings
 from PyQt5.QtGui import QIcon
 from data.Globals import Globals
-
+from ui.style.Theme import apply_stylesheet
 
 
 class SettingsWindow(QDialog):
@@ -91,6 +91,7 @@ class SettingsWindow(QDialog):
         widget = QWidget()
         widget.setLayout(layout)
         self.setLayout(layout)
+        apply_stylesheet(self)
         self.setWindowIcon(QIcon(Globals.ICON_PATH))
 
     def save_combat_session_timeout(self, value):

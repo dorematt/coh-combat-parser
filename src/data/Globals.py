@@ -1,4 +1,5 @@
 class Globals:
+    import os
     VERSION = "0.0.5"
     BUILD_DATE = "15 Jan 2024"
     BUILD_TYPE = "ALPHA"
@@ -7,6 +8,7 @@ class Globals:
     CONTRIBUTORS = []
 
     ICON_PATH = "H:\\01_PROJECTS\\GitHub\\coh-combat-parser\\img\\icon_256.png"
+    RESOURCE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     DEFAULT_COMBAT_SESSION_TIMEOUT = 15
     DEFAULT_COMBAT_SESSION_NAME = "Session"
