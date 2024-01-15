@@ -1,14 +1,6 @@
-class Globals:
-    VERSION = "0.0.3"
-    BUILD_DATE = "11 Jan 2024"
-    BUILD_TYPE = "ALPHA"
-    AUTHOR = "@10kVolts"
-    CONTRIBUTORS = []
-    CONSOLE_VERBOSITY = 1
-
 def main():
-    from LogMonitorUI import LogMonitorUI
-    from CombatParser import Parser
+    from ui.MainUI import MainUI
+    from data.Globals import Globals
     from PyQt5.QtWidgets import QApplication
     import sys
 
@@ -30,7 +22,7 @@ def main():
     preamble()
 
     app = QApplication(sys.argv)
-    main_ui = LogMonitorUI()
+    main_ui = MainUI()
 
     main_ui.show()
 

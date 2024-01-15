@@ -1,29 +1,37 @@
 import sys
 from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QGridLayout, QWidget, QFileDialog, QHBoxLayout
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QIcon
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
-from CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
-from CoH_Parser import Globals
+from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
+from data.Globals import Globals
 import random
+from ui.Settings import SettingsWindow
 import os.path
 
 class ParserThread(QThread):
-    def __init__(self, file_path: str, live: bool):
+    sig_process_live_log = pyqtSignal(str)
+    sig_process_existing_log = pyqtSignal(str)
+    def __init__(self, file_path : str,live: bool):
         super().__init__()
+        self.settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
         self.file_path = file_path
         self.live = live
-        self.parser = Parser()
+        self.parser = Parser(self)
+        if self.settings.value("ConsoleVerbosity", 1, int) >= 2: print("Parser Initialized")
+        self.sig_process_live_log.connect(lambda: self.parser.process_live_log(self.file_path))
+        self.sig_process_existing_log.connect(lambda: self.parser.process_existing_log(self.file_path))
 
     def run(self):
         if self.live:
-            self.parser.process_live_log(self.file_path)
+            self.sig_process_live_log.emit(self.file_path)
+            ("Emitted Signal: Processing Live Log, with file path: ", self.file_path)
         else:
-            self.parser.process_existing_log(self.file_path)
+            self.sig_process_existing_log.emit(self.file_path)
+            print("Emitted Signal: Process Existing Log")
         
 
-class LogMonitorUI(QMainWindow):
+class MainUI(QMainWindow):
     selected_session = None
-    parser = None
     monitoring_live = False
     combat_session_data = []
     parser_thread = QThread()
@@ -31,8 +39,9 @@ class LogMonitorUI(QMainWindow):
     sig_stop_monitoring = pyqtSignal()
     sig_run = pyqtSignal(str)
     sig_run_live = pyqtSignal(str)
+    mutex = QMutex()
     # sig_terminate_processing = pyqtSignal()
-    settings = QSettings("dorematt", "coh-combat-parser")
+    settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
     last_file_path = settings.value("last_file_path", "", type=str)
 
 
@@ -51,8 +60,9 @@ class LogMonitorUI(QMainWindow):
             self.overall_dps_var = QLabel("DPS:")
 
             # File path input label and entry
-            self.file_path_label = QLabel("Log File Path:")
+            self.file_path_label = QLabel("Log File Path:",)
             self.browse_button = QPushButton("Browse", clicked=self.browse_file)
+            self.settings_button = QPushButton("Settings", clicked=self.open_settings_window)
 
             # Start/Stop and Process buttons
             self.start_stop_button = QPushButton("Start Log", clicked=self.start_stop_log)
@@ -60,13 +70,15 @@ class LogMonitorUI(QMainWindow):
 
             # Run Test button to add test data to the Treeview
             self.run_test_button = QPushButton("Run Test", clicked=self.run_test_log)
+
+
         def define_ability_tree():
             # Main Ability Tree
             self.ability_tree_display = QTreeWidget()
             self.ability_tree_display.setSortingEnabled(True)
 
-            self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total"])
-            self.ability_tree_display.setColumnWidth(0, 250)
+            self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total", "Hits", "Tries"])
+            self.ability_tree_display.setColumnWidth(0, 275)
             self.ability_tree_display.setColumnWidth(1, 75)
             self.ability_tree_display.setColumnWidth(2, 75)
             self.ability_tree_display.setColumnWidth(3, 100)
@@ -74,6 +86,8 @@ class LogMonitorUI(QMainWindow):
             self.ability_tree_display.setColumnWidth(5, 75)
             self.ability_tree_display.setColumnWidth(6, 75)
             self.ability_tree_display.setColumnWidth(7, 75)
+            self.ability_tree_display.setColumnWidth(8, 75)
+            self.ability_tree_display.setColumnWidth(9, 75)
             self.ability_tree_display.setMinimumWidth(500)
 
             # Set the default sort column to DPS
@@ -82,7 +96,7 @@ class LogMonitorUI(QMainWindow):
             # Combat Session Tree
             self.combat_session_tree = QTreeWidget()
             self.combat_session_tree.setHeaderLabels(["Session", "Duration","DPS", "EXP", "Inf"])
-            self.combat_session_tree.setColumnWidth(0, 100)
+            self.combat_session_tree.setColumnWidth(0, 150)
             self.combat_session_tree.setColumnWidth(1, 75)
             self.combat_session_tree.setColumnWidth(2, 75)
             self.combat_session_tree.setColumnWidth(3, 80)
@@ -90,7 +104,7 @@ class LogMonitorUI(QMainWindow):
             self.combat_session_tree.setSelectionMode(QTreeWidget.SingleSelection)
             self.combat_session_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.combat_session_tree.setMinimumWidth(250)
-            self.combat_session_tree.setMaximumWidth(420)
+            self.combat_session_tree.setMaximumWidth(500)
 
             self.combat_session_tree.itemSelectionChanged.connect(self.on_session_selection_change)
         def setup_layout():
@@ -100,6 +114,7 @@ class LogMonitorUI(QMainWindow):
             browse_layout.addWidget(self.file_path_label)
             browse_layout.addWidget(self.file_path_var)
             browse_layout.addWidget(self.browse_button)
+            browse_layout.addWidget(self.settings_button)
 
             button_layout = QHBoxLayout()
             button_layout.addWidget(self.start_stop_button)
@@ -124,22 +139,18 @@ class LogMonitorUI(QMainWindow):
         define_ability_tree()
         define_combat_session_tree()
         setup_layout()
+
+        # add window icon
+        self.setWindowIcon(QIcon(Globals.ICON_PATH))
         print("Done.")
 
     def browse_file(self):
         self.lock_ui()
         file_path, _ = QFileDialog.getOpenFileName(directory=self.last_file_path, filter="Text Files (*.txt)")
-        self.file_path_var.setText(file_path)
-        self.settings.setValue("last_file_path", file_path)
+        if file_path != "":
+            self.file_path_var.setText(file_path)
+            self.settings.setValue("last_file_path", file_path)
         self.unlock_ui()
-
-    def start_parse_thread(self):
-        '''To be replaced by start_worker_thread once working...'''
-        self.parser.sig_finished.connect(self.on_parser_finished)
-        self.parser.sig_periodic_update.connect(self.on_sig_periodic_update)
-        self.parser.moveToThread(self.parser_thread)
-        self.parser_thread.start()
-        print("Parser Thread Started: ", self.parser_thread.isRunning())
 
     def start_worker_thread(self, file_path: str, live: bool):
         
@@ -164,8 +175,6 @@ class LogMonitorUI(QMainWindow):
             self.start_stop_button.setEnabled(True)
             self.monitoring_live = True
             self.start_worker_thread(file_path, True)
-            # self.parser_thread.started.connect(lambda: self.parser.process_live_log(file_path))
-            #self.start_parse_thread()
             self.ability_tree_display.clear()
             self.combat_session_tree.clear()
 
@@ -186,80 +195,71 @@ class LogMonitorUI(QMainWindow):
         if self.process_button.text() == "Process Existing Log":
             
             #Lock UI
-            self.process_button.setText("Processing...")
+            self.process_button.setText("Stop Processing")
             self.lock_ui()
-            # self.process_button.setEnabled(True)
-            # self.parser_thread.started.connect(lambda: self.parser.process_existing_log(file_path))
-            #self.start_parse_thread()
             self.start_worker_thread(file_path, False)
             self.ability_tree_display.clear()
             self.combat_session_tree.clear()
-            #self.WorkerThread.run_existing(file_path)
-            #self.sig_run.emit()
-            
+            self.process_button.setEnabled(True)
 
-        elif self.process_button.text == ("Stop Processing"):
+        else:
             print("Terminating Parser Processing...")
-            # self.parser_thread.quit()
-            # self.WorkerThread.terminate()
+            self.process_button.setEnabled(False)
             self.sig_stop_monitoring.emit()
-            self.unlock_ui()
             self.process_button.setText("Process Existing Log")
 
-   # @pyqtSlot()
-    def on_parser_finished(self):
-        self.parser_thread.quit()
-        print("Parser Thread Quit")
-        self.unlock_ui()
-        self.process_button.setText("Process Existing Log")
-        with QMutexLocker(self.parser.mutex):
-            self.repopulate_sessions(self.parser.combat_session_data)
-            self.selected_session = self.parser.combat_session_data[-1]
-            self.repopulate(self.selected_session)
 
     def on_worker_finished(self, data):
-        self.combat_session_data = data
-        self.sig_run.disconnect
-        self.WorkerThread.parser.sig_finished.disconnect
-        self.WorkerThread.parser.sig_periodic_update.disconnect
-        self.WorkerThread.quit()
-        print("Worker Thread Quit")
-        self.unlock_ui()
-        self.process_button.setText("Process Existing Log")
-        if self.combat_session_data != []:
-            self.repopulate_sessions(self.combat_session_data)
-            self.selected_session = self.combat_session_data[-1]
-            self.repopulate(self.selected_session)
+        with QMutexLocker(self.mutex):
+            self.combat_session_data = data
+            self.sig_run.disconnect
+            self.WorkerThread.parser.sig_finished.disconnect
+            self.WorkerThread.parser.sig_periodic_update.disconnect
+            self.WorkerThread.quit()
+            print("Worker Thread Quit")
+            self.unlock_ui()
+            self.process_button.setText("Process Existing Log")
+            if self.combat_session_data != []:
+                self.selected_session = self.combat_session_data[-1]
+                self.repopulate_sessions(self.combat_session_data)
+                self.repopulate(self.selected_session)
 
     @pyqtSlot()
     def on_sig_periodic_update(self, data):
-        self.combat_session_data = data
-        self.repopulate_sessions(self.combat_session_data)
-
-        self.selected_session = self.combat_session_data[-1]
-        self.repopulate(self.selected_session)
+        with QMutexLocker(self.mutex):
+            self.combat_session_data = data
+            if data == [] or self.combat_session_data is None:
+                self.selected_session = []
+            else:
+                self.selected_session = self.combat_session_data[-1]
+            self.repopulate_sessions(self.combat_session_data)
+            self.repopulate(self.selected_session)
         
     def on_session_selection_change(self):
         '''Handles the event when a combat session is selected in the treeWidget'''
         if self.combat_session_tree.selectedItems():
-            selected_index= self.combat_session_tree.selectedIndexes()[0].row()
-            self.selected_session = self.combat_session_data[selected_index]
-            self.repopulate(self.selected_session)
+            with QMutexLocker(self.mutex):
+                selected_index= self.combat_session_tree.selectedIndexes()[0].row()
+                self.selected_session = self.combat_session_data[selected_index]
+                self.repopulate(self.selected_session)
 
     def repopulate_sessions(self, combat_session_list: list):
-        '''Populates the treeWidget with data from the provided list of combat sessions'''
+        '''Populates the treeWidget with data from the provided list of combat sessions. This should only be called while under a mutex lock'''
         # Clear the treeWidget
         self.combat_session_tree.clear()
+        if combat_session_list == []: return
         for session, combat_session in enumerate(combat_session_list, start=1):
-            session_item = QTreeWidgetItem(self.combat_session_tree, [str(session)])
+            session_name = combat_session_list[session-1].get_name()
+            session_item = QTreeWidgetItem(self.combat_session_tree, [session_name])
             session_item.setText(1, str(combat_session.duration) + "s")
             session_item.setText(2, str(combat_session.get_dps()))
             session_item.setText(3, "{:,}".format(combat_session.get_exp()))
             session_item.setText(4, "{:,}".format(combat_session.get_inf()))
 
     def repopulate(self, session):
+        '''Populates the ability tree with data from the provided combat session. This should only be called while under a mutex lock'''
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
-            for i in range(8):
+            for i in range(10):
                 item.setFont(i, QFont("Arial", font_size, QFont.Bold if is_bold else QFont.Normal))
                 if background_color:
                     item.setBackground(i, background_color)
@@ -271,12 +271,16 @@ class LogMonitorUI(QMainWindow):
             character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
             character_item.setData(3, Qt.DisplayRole, "{:,}".format(character.get_average_damage()))
             character_item.setData(7, Qt.DisplayRole, "{:,}".format(character.get_total_damage()))
+            character_item.setData(8, Qt.DisplayRole, "{:,}".format(character.get_hits()))
+            character_item.setData(9, Qt.DisplayRole, "{:,}".format(character.get_tries()))
 
             character_item.setTextAlignment(2, Qt.AlignCenter)
             character_item.setTextAlignment(3, Qt.AlignCenter)
             character_item.setTextAlignment(4, Qt.AlignCenter)
             character_item.setTextAlignment(5, Qt.AlignCenter)
             character_item.setTextAlignment(6, Qt.AlignCenter)
+            character_item.setTextAlignment(7, Qt.AlignCenter)
+            character_item.setTextAlignment(8, Qt.AlignCenter)
 
             return character_item
 
@@ -289,12 +293,16 @@ class LogMonitorUI(QMainWindow):
             ability_item.setData(5, Qt.DisplayRole, "{:,}".format(ability.get_max_damage()))
             ability_item.setData(6, Qt.DisplayRole, "{:,}".format(ability.get_min_damage()))
             ability_item.setData(7, Qt.DisplayRole, "{:,}".format(ability.get_total_damage()))
+            ability_item.setData(8, Qt.DisplayRole, "{:,}".format(ability.get_hits()))
+            ability_item.setData(9, Qt.DisplayRole, "{:,}".format(ability.get_tries()))
 
             ability_item.setTextAlignment(2, Qt.AlignCenter)
             ability_item.setTextAlignment(3, Qt.AlignCenter)
             ability_item.setTextAlignment(4, Qt.AlignCenter)
             ability_item.setTextAlignment(5, Qt.AlignCenter)
             ability_item.setTextAlignment(6, Qt.AlignCenter)
+            ability_item.setTextAlignment(7, Qt.AlignCenter)
+            ability_item.setTextAlignment(8, Qt.AlignCenter)
 
             return ability_item
 
@@ -321,7 +329,7 @@ class LogMonitorUI(QMainWindow):
         self.ability_tree_display.clear()
 
         # Repopulate the treeWidget
-        if session is None:
+        if session is None or session == []:
             return
 
         duration = session.duration
@@ -338,6 +346,11 @@ class LogMonitorUI(QMainWindow):
         self.ability_tree_display.expandToDepth(0)
         self.ability_tree_display.sortByColumn(current_column, current_order)
 
+
+    def open_settings_window(self):
+        self.settings_window = SettingsWindow()
+        self.settings_window.exec_()
+
     def error(self, message, title = "Error"):
         error_box = QMessageBox()
         error_box.setIcon(QMessageBox.Critical)
@@ -353,12 +366,14 @@ class LogMonitorUI(QMainWindow):
         self.file_path_var.setEnabled(False)
         self.browse_button.setEnabled(False)
         self.run_test_button.setEnabled(False)
+        self.settings_button.setEnabled(False)
     def unlock_ui(self):
         self.start_stop_button.setEnabled(True)
         self.process_button.setEnabled(True)
         self.file_path_var.setEnabled(True)
         self.browse_button.setEnabled(True)
         self.run_test_button.setEnabled(True)
+        self.settings_button.setEnabled(True)
     def check_file_path_valid(self, file_path: str) -> bool:
         file_path = self.file_path_var.text()
         if file_path == "":
@@ -424,14 +439,15 @@ class LogMonitorUI(QMainWindow):
 
         # Call the function to set up test data
         setup_test_data()
-        self.combat_session_data = test_sessions
-        # Populate the tree with test data
-        self.repopulate_sessions(self.combat_session_data)
+        with QMutexLocker(self.mutex):
+            self.combat_session_data = test_sessions
+            # Populate the tree with test data
+            self.repopulate_sessions(self.combat_session_data)
 
 
 if __name__ == "__main__":
     # Create the UI
     app = QApplication(sys.argv)
-    ui = LogMonitorUI(parser=Parser())
+    ui = MainUI(parser=Parser())
     ui.show()
     sys.exit(app.exec_())
