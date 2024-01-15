@@ -8,12 +8,13 @@ This is currently in **ALPHA** - expect code to be buggy and possible inaccuraci
 
 - Log outgoing damage from yourself and from your pets
     - Calculate overall DPS
-    - Show damage data for individual abilities, procs, and their damage types
+    - Show damage data for individual abilities, procs, and their damage types and flairs such as Crits
     - Calculate the average damage per hit, per ability
 - Log hit accuracy
 - Automatically split logs into combat sessions
     - A Sesison starts when you activate an ability and finishes 15 seconds after no further damage was done
-    - Session duration is measured from the first damaging ability to the last (to the nearest second) 
+    - Session duration is measured from the first damaging ability to the last (to the nearest second)
+ - Rename your sessions by typing `##SESSION_NAME Session` into Local chat (swap Sesison for whatever name you want)
 
 ## Installation and Operation
 
