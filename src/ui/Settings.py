@@ -1,6 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QSpinBox, QLineEdit, QVBoxLayout, QWidget, QPushButton, QCheckBox, QHBoxLayout
 from PyQt5.QtCore import QSettings
+from PyQt5.QtGui import QIcon
 from data.Globals import Globals
 
 
@@ -90,6 +91,7 @@ class SettingsWindow(QDialog):
         widget = QWidget()
         widget.setLayout(layout)
         self.setLayout(layout)
+        self.setWindowIcon(QIcon(Globals.ICON_PATH))
 
     def save_combat_session_timeout(self, value):
         self.settings.setValue("CombatSessionTimeout", value)

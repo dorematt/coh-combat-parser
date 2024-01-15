@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QGridLayout, QWidget, QFileDialog, QHBoxLayout
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QIcon
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
 from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
 from data.Globals import Globals
@@ -139,6 +139,9 @@ class MainUI(QMainWindow):
         define_ability_tree()
         define_combat_session_tree()
         setup_layout()
+
+        # add window icon
+        self.setWindowIcon(QIcon(Globals.ICON_PATH))
         print("Done.")
 
     def browse_file(self):

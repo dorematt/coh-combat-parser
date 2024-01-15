@@ -1,6 +1,6 @@
 __pycache__/
 venv/
 __experimental__/
-Source/build/
-Source/dist/
+src/build/
+src/dist/
 *.spec
