@@ -7,8 +7,7 @@ class Globals:
     APPLICATION_NAME = "coh-combat-parser"
     CONTRIBUTORS = []
 
-    ICON_PATH = "H:\\01_PROJECTS\\GitHub\\coh-combat-parser\\img\\icon_256.png"
-    RESOURCE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     DEFAULT_COMBAT_SESSION_TIMEOUT = 15
     DEFAULT_COMBAT_SESSION_NAME = "Session"

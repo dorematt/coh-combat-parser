@@ -6,7 +6,7 @@ from combat.CombatParser import Parser, CombatSession, Character, Ability, Damag
 from data.Globals import Globals
 import random
 from ui.Settings import SettingsWindow
-from ui.style.Theme import apply_stylesheet
+from ui.style.Theme import apply_stylesheet, apply_header_style_fix
 import os.path
 
 class ParserThread(QThread):
@@ -77,9 +77,11 @@ class MainUI(QMainWindow):
             # Main Ability Tree
             self.ability_tree_display = QTreeWidget()
             self.ability_tree_display.setSortingEnabled(True)
-
             self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total", "Hits", "Tries"])
+            apply_header_style_fix(self.ability_tree_display)
+
             self.ability_tree_display.setColumnWidth(0, 275)
+
             self.ability_tree_display.setColumnWidth(1, 75)
             self.ability_tree_display.setColumnWidth(2, 75)
             self.ability_tree_display.setColumnWidth(3, 100)
@@ -97,6 +99,7 @@ class MainUI(QMainWindow):
             # Combat Session Tree
             self.combat_session_tree = QTreeWidget()
             self.combat_session_tree.setHeaderLabels(["Session", "Duration","DPS", "EXP", "Inf"])
+            apply_header_style_fix(self.combat_session_tree)
             self.combat_session_tree.setColumnWidth(0, 150)
             self.combat_session_tree.setColumnWidth(1, 75)
             self.combat_session_tree.setColumnWidth(2, 75)
@@ -122,10 +125,10 @@ class MainUI(QMainWindow):
             button_layout.addWidget(self.process_button)
             button_layout.addWidget(self.run_test_button)
 
-            combat_tree_layout = QGridLayout()
-            combat_tree_layout.columnCount = 5
-            combat_tree_layout.addWidget(self.combat_session_tree, 0, 0)
-            combat_tree_layout.addWidget(self.ability_tree_display, 0, 2)
+            combat_tree_layout = QHBoxLayout()
+            # combat_tree_layout.columnCount = 5
+            combat_tree_layout.addWidget(self.combat_session_tree)
+            combat_tree_layout.addWidget(self.ability_tree_display)
 
             main_layout = QVBoxLayout()
             main_layout.addLayout(browse_layout)
@@ -144,8 +147,7 @@ class MainUI(QMainWindow):
         setup_layout()
         apply_stylesheet(self)
 
-        # add window icon
-        self.setWindowIcon(QIcon(Globals.ICON_PATH))
+
         print("Done.")
 
     def browse_file(self):
@@ -264,13 +266,13 @@ class MainUI(QMainWindow):
         '''Populates the ability tree with data from the provided combat session. This should only be called while under a mutex lock'''
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
             for i in range(10):
-                item.setFont(i, QFont("Arial", font_size, QFont.Bold if is_bold else QFont.Normal))
+                item.setFont(i, QFont("Fira Sans Medium", font_size, QFont.Bold if is_bold else QFont.Normal))
                 if background_color:
                     item.setBackground(i, background_color)
 
         def create_character_item(tree_widget, character_name, duration):
             character_item = QTreeWidgetItem(tree_widget, [character_name])
-            set_styling(character_item, font_size=11, is_bold=True, background_color=QColor(240, 240, 240))
+            set_styling(character_item, font_size=11, is_bold=True, background_color=QColor(25, 25, 25))
             character_item.setData(1, Qt.DisplayRole, character.get_dps(duration))
             character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
             character_item.setData(3, Qt.DisplayRole, "{:,}".format(character.get_average_damage()))

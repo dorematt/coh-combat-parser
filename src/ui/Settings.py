@@ -92,7 +92,6 @@ class SettingsWindow(QDialog):
         widget.setLayout(layout)
         self.setLayout(layout)
         apply_stylesheet(self)
-        self.setWindowIcon(QIcon(Globals.ICON_PATH))
 
     def save_combat_session_timeout(self, value):
         self.settings.setValue("CombatSessionTimeout", value)

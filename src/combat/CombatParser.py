@@ -112,8 +112,8 @@ class Parser(QObject):
         self.abilities = {} # Stores a list of abilities
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
-        final_update = False # Flag to indicate if a final update is required
-        user_session_name = ""
+        self.final_update = False # Flag to indicate if a final update is required
+        self.user_session_name = ""
 
         if self.CONSOLE_VERBOSITY >= 2: print('          Parser variables cleaned...')
 

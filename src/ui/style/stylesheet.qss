@@ -19,7 +19,7 @@ QWidget
 
 QTreeView, QListView
 {
-    background-color: silver;
+    background-color: black;
     margin-left: 5px;
 }
 
@@ -110,7 +110,7 @@ QPushButton
     border-style: solid;
     border-radius: 6;
     padding: 3px;
-    font-size: 12px;
+    font-size: 14px;
     padding-left: 5px;
     padding-right: 5px;
     min-width: 40px;
@@ -165,7 +165,7 @@ QComboBox::drop-down
 
 QComboBox::down-arrow
 {
-     image: url(:/dark_orange/img/down_arrow.png);
+     //image: url(./img/down_arrow.png);
 }
 
 QGroupBox
@@ -347,7 +347,7 @@ QMainWindow::separator:hover
 QToolBar::handle
 {
      spacing: 3px; /* spacing between items in the tool bar */
-     background: url(:/dark_orange/img/handle.png);
+     //background: url(./img/handle.png);
 }
 
 QMenu::separator
@@ -467,7 +467,7 @@ QRadioButton::indicator:hover, QCheckBox::indicator:hover
 
 QCheckBox::indicator:checked
 {
-    image:url(:/dark_orange/img/checkbox.png);
+    //image:url(:/img/checkbox.png);
 }
 
 QCheckBox::indicator:disabled, QRadioButton::indicator:disabled
