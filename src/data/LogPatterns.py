@@ -32,9 +32,9 @@ PATTERNS = {
     "reward_gain_inf": re.compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<inf_value>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
     ),
-    "reward_gain_item": re.compile(
-        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You recieve (?P<item_name>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
-    ),
+    #"reward_gain_item": re.compile(
+    #    r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You recieve (?P<item_name>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
+    #),
     # "healing": re.compile(
     #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<healer>.+?) (?:heals|heal) (?:you|PLAYER_NAME) with their (?P<ability>.+?) for (?P<healing_value>[\d.]+) health points(?: over time)?\.*"
     # ),
