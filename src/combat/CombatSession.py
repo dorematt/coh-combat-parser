@@ -1,7 +1,9 @@
 from  PyQt5.QtCore import QObject
 class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
-    CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.''' 
+    CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.
+    
+    The assumption is that this class will be under a mutex lock when it is being accessed.''' 
     def __init__(self, timestamp=0, name=""):
         super().__init__()
         self.start_time = timestamp
@@ -21,9 +23,16 @@ class CombatSession(QObject):
         self.name = name
     def update_duration(self):
         self.duration = self.end_time - self.start_time
-    def update_session_time(self, timestamp):
-        self.end_time = timestamp
-        self.update_duration()
+    def update_session_time(self, timestamp, in_combat = True):
+        
+        if in_combat:
+            self.end_time = timestamp
+            self.update_duration()
+
+    def has_no_damage(self):
+        '''Returns True if the session has no damage registered'''
+        return self.get_total_damage() == 0
+    
 
     def get_name(self):
         return self.name

@@ -1,5 +1,5 @@
 PSEUDOPETS = ["Caltrops", "Lightning Rod", "Whirlwind", "Omega Maneuver", "Poison Trap", "Poison Gas", "Detonator", "Trip Mine", "Triage Beacon", "Oil Slick", " Oil Slick Arrow", "Rain of Fire", "Tar Patch",
-              "Burn", "Water Spout", "Sleet", "Freezing Rain", "Faraday Cage", 
+              "Burn", "Water Spout", "Sleet", "Freezing Rain", "Faraday Cage", "Enflame", 
               
               
               "Ion Core Final Judgement", "Ion Core Judgement", "Ion Judgement", "Ion Partial Core Judgement", "Ion Partial Radial Judgement", "Ion Radial Final Judgement", "Ion Radial Judgement", "Ion Total Core Judgement", "Ion Total Radial Judgement",

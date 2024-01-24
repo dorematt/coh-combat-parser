@@ -1,5 +1,6 @@
-import re
+
 import os.path
+import re
 import time
 from datetime import datetime
 from combat.Ability import Ability
@@ -9,64 +10,12 @@ from combat.CombatSession import CombatSession
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QCoreApplication, QSettings
 from data.Globals import Globals
 from data.pseudopets import is_pseudopet
+from data.LogPatterns import PATTERNS
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
 class Parser(QObject):
     '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
-    PATTERNS = {
-        "player_ability_activate": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You activated the (?P<ability>.+?) power\."
-        ),
-        "player_hit_roll": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
-        ),
-        "player_pet_hit_roll": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
-        ),
-        "player_damage": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
-        ),
-        "player_pet_damage": re.compile(
-             r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * You hit (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
-        ),
-       # "foe_hit_roll": re.compile(
-       #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
-       # ),
-       # "foe_damage": re.compile(
-       #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) hits you with their (?P<ability>.+?) for (?P<damage_value>[\d.]+) points of (?P<damage_type>\w+) damage\.*"
-       # ),
-        "reward_gain_both": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d{1,3}(,\d{3})*(\.\d+)?) experience and (?P<inf_value>\d{1,3}(,\d{3})*(\.\d+)?) (?:influence|information|infamy)\.*"
-        ),
-        "reward_gain_exp": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d+(,\d{3})*|\d+) experience\."
-        ),
-        "reward_gain_inf": re.compile(
-            r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<inf_value>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
-        ),
-       # "influence_gain": re.compile(
-       #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) .*? and (?P<inf_value>\d+) (influence|infamy|information)\.*"
-       # ),
-       # "healing": re.compile(
-       #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<healer>.+?) (?:heals|heal) (?:you|PLAYER_NAME) with their (?P<ability>.+?) for (?P<healing_value>[\d.]+) health points(?: over time)?\.*"
-       # ),
-        # This pattern should capture endurance recovery. An example line for endurance recovery is needed to refine this pattern.
-       # "endurance_recovery": re.compile(
-       #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<restorer>.+?) (?:restores|restore) (?:your|PLAYER_NAME's) endurance by (?P<endurance_value>[\d.]+) points\.*"
-       # ),
-        "player_name": re.compile( # Matches a welcome message that includes the player name
-        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
-        ),
-        "command": re.compile( # Matches a command message in chat
-        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) \[Local\] (?P<player>.+?): .*?##(?P<command>\S+) (?P<value>.*)"
-        ),
-    }
-    
-    PATTERN_DATETIME = {
-        "date_time": re.compile(
-        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2})"
-        )
-    }
+
     LOG_FILE_PATH = ""
     log_file = None
     PLAYER_NAME = ""# Seconds, determines how long to wait between  # 0 = Silent, 1 = Errors and Warnings, 3 = Errors, Warnings and Info, 3 = Debug level 1, 4 = Debug level 2
@@ -101,6 +50,7 @@ class Parser(QObject):
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
         self.session_name_count = 0 # For counting the number of sessions with the same name
         self.combat_session_live = False # Flag to indicate if a combat session is active
+        self.in_combat = False # Flag to indicate that the player is/has dealing damage
         self.global_combat_duration = 0 # Stores the total durations of all combat sessions
 
         # Set Exp and Influence values
@@ -108,8 +58,6 @@ class Parser(QObject):
         self.INF_VALUE = 0
         
         # create a key-value list of abilities
-        self.Chars = {} # Stores a list of characters
-        self.abilities = {} # Stores a list of abilities
         self.GOBAL_START_TIME = 0 # Stores the timestamp of the first event as an int
         self.GLOBAL_CURRENT_TIME = 0 # Stores the latest timestamp as an int
         self.final_update = False # Flag to indicate if a final update is required
@@ -120,7 +68,7 @@ class Parser(QObject):
     
     def update_regex_player_name(self, player_name):
         updated_patterns = {}
-        for key, regex in self.PATTERNS.items():
+        for key, regex in PATTERNS.items():
             updated_pattern = regex.pattern.replace('PLAYER_NAME', player_name)
             updated_regex = re.compile(updated_pattern)
             if self.CONSOLE_VERBOSITY == 3: print('Updated Regex: ', updated_regex)
@@ -130,7 +78,7 @@ class Parser(QObject):
     
     def extract_from_line(self, log_line):
         '''Extracts data from a log line using regex patterns, returns a tuple containing the log entry type and a dictionary of the extracted data.'''
-        for key, regex in self.PATTERNS.items():
+        for key, regex in PATTERNS.items():
             match = regex.match(log_line)
             if match:
                 return (key, match.groupdict())
@@ -153,9 +101,11 @@ class Parser(QObject):
             name = self.user_session_name + " " + str(self.session_name_count)
         self.combat_session_data.append(CombatSession(timestamp,name))
         self.combat_session_live = True
+        self.in_combat = False
         if self.monitoring_live: self.interval_timer.start() # Begins periodic UI refreshes
         if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Combat Session Started: ", self.session_count, '\n')
         return self.combat_session_data[-1]
+    
     def check_session(self, timestamp):
         '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
 
@@ -171,6 +121,7 @@ class Parser(QObject):
             else:
                 return 1 # Session still active and valid
         return 0 # No active session
+    
     def end_current_session(self):
         '''Ends the current combat session'''
         self.combat_session_data[-1].update_duration()
@@ -187,9 +138,7 @@ class Parser(QObject):
         self.combat_session_live = False
         if self.monitoring_live: self.final_update = True
         
-    def update_session_time(self, timestamp):
-        '''Updates the current combat session time'''
-        self.combat_session_data[-1].update_session_time(timestamp)
+
     def print_session_results(self, session):
         '''Displays the results of the current combat session'''
         if self.monitoring_live:
@@ -207,18 +156,21 @@ class Parser(QObject):
         # Update the current time and check combat session status
         with QMutexLocker(self.mutex):
             self.update_global_time(self.convert_timestamp(data["date"], data["time"]))
-            status = self.check_session(self.GLOBAL_CURRENT_TIME)
+            timestamp = self.GLOBAL_CURRENT_TIME
+            status = self.check_session(timestamp)
 
-            def update_session_and_time(in_combat=False): # Helper function to call session updates as well as beginning new sessions
-                if (status == 0 or status == -1) and in_combat:
-                    self.new_session(self.GLOBAL_CURRENT_TIME) # We 
-                self.combat_session_data[-1].update_session_time(self.GLOBAL_CURRENT_TIME)
+            def trigger_session_update(in_combat): # Helper function to call session updates as well as beginning new sessions
+                if status == 0 or status == -1:
+                    self.new_session(timestamp)
+                    self.combat_session_data[-1].update_session_time(timestamp, in_combat)
+                if in_combat:
+                    self.combat_session_data[-1].update_session_time(timestamp, in_combat)
 
 
             if status == -1: # Checking for a timed-out combat session
 
                 # Remove the session if it had no damage
-                if self.combat_session_data[-1].get_total_damage() == 0:
+                if self.combat_session_data[-1].has_no_damage():
                     self.remove_last_session()
                 else:
                     self.end_current_session()
@@ -226,16 +178,16 @@ class Parser(QObject):
                     self.print_session_results(self.combat_session_data[-1])
 
             if event == "player_ability_activate":
-                update_session_and_time(True)
+                trigger_session_update(False)
                 self.handle_event_player_power_activate(data)
                 
 
             if event == "player_hit_roll" or event == "player_pet_hit_roll":
-                update_session_and_time(True)
+                trigger_session_update(False)
                 self.handle_event_player_hit_roll(data, event == "player_pet_hit_roll")
 
             elif event == "player_damage" or event == "player_pet_damage":
-                update_session_and_time(True)
+                trigger_session_update(True)
                 self.handle_event_player_damage(data, event == "player_pet_damage")
 
             elif event == "reward_gain_both" or event == "reward_gain_exp" or event == "reward_gain_inf":
