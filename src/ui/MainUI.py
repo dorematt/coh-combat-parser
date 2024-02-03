@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QGridLayout, QWidget, QFileDialog, QHBoxLayout
-from PyQt5.QtGui import QColor, QFont, QIcon
+from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
 from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
 from data.Globals import Globals
@@ -83,12 +83,12 @@ class MainUI(QMainWindow):
             self.ability_tree_display.setColumnWidth(0, 275)
 
             self.ability_tree_display.setColumnWidth(1, 75)
-            self.ability_tree_display.setColumnWidth(2, 75)
+            self.ability_tree_display.setColumnWidth(2, 100)
             self.ability_tree_display.setColumnWidth(3, 100)
             self.ability_tree_display.setColumnWidth(4, 75)
             self.ability_tree_display.setColumnWidth(5, 75)
             self.ability_tree_display.setColumnWidth(6, 75)
-            self.ability_tree_display.setColumnWidth(7, 75)
+            self.ability_tree_display.setColumnWidth(7, 100)
             self.ability_tree_display.setColumnWidth(8, 75)
             self.ability_tree_display.setColumnWidth(9, 75)
             self.ability_tree_display.setMinimumWidth(500)
@@ -245,7 +245,7 @@ class MainUI(QMainWindow):
         '''Handles the event when a combat session is selected in the treeWidget'''
         if self.combat_session_tree.selectedItems():
             with QMutexLocker(self.mutex):
-                selected_index= self.combat_session_tree.selectedIndexes()[0].row()
+                selected_index = self.combat_session_tree.selectedIndexes()[0].row()
                 self.selected_session = self.combat_session_data[selected_index]
                 self.repopulate(self.selected_session)
 

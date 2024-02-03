@@ -20,7 +20,7 @@ def apply_stylesheet(app):
     print("Updated Font:", app.font().family(), app.font().pointSize())
 
     # Set the application icon
-    app.setWindowIcon(QIcon(os.path.join(Globals.ROOT_DIR, "ui", "icon", "icon_256.png")))
+    app.setWindowIcon(QIcon(os.path.join(Globals.ROOT_DIR, "ui", "icon", "icon_256.ico")))
 
 def apply_header_style_fix(component):
     '''This is a workaround for a bug in Qt5 that causes the header to not be styled correctly.'''
