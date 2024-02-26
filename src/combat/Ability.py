@@ -64,8 +64,10 @@ class Ability(QObject):
     def get_average_damage(self):
         '''Calculates the average damage for the ability'''
         average = 0
-        for component in self.damage:
-            average += component.get_average_damage()
+        total = self.get_total_damage()
+        if self.hits or total == 0:
+            return 0
+        average = total / self.hits
         return round(average,2)
     
     def get_accuracy(self):
