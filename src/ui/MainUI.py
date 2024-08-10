@@ -172,14 +172,14 @@ class MainUI(QMainWindow):
 
     def start_worker_thread(self, file_path: str, live: bool):
         
-        if self.CONSOLE_VERBOSITY > 1: print("Starting Worker Thread...")
+        if self.CONSOLE_VERBOSITY >= 2: print("Starting Worker Thread...")
         self.WorkerThread = ParserThread(file_path, live)
         self.WorkerThread.parser.sig_finished.connect(self.on_worker_finished)
         self.WorkerThread.parser.sig_periodic_update.connect(lambda: self.on_sig_periodic_update(self.WorkerThread.parser.combat_session_data))
         self.sig_stop_monitoring.connect(self.WorkerThread.parser.on_sig_stop_monitoring)
         self.WorkerThread.start()
         self.settings.setValue("last_file_path", file_path)
-        if self.CONSOLE_VERBOSITY > 1: print("Worker Thread Started: ", self.WorkerThread.isRunning())
+        if self.CONSOLE_VERBOSITY >= 2: print("Worker Thread Started: ", self.WorkerThread.isRunning())
 
    # @pyqtSlot()
     def start_stop_log(self):
@@ -237,7 +237,7 @@ class MainUI(QMainWindow):
             self.WorkerThread.parser.sig_finished.disconnect
             self.WorkerThread.parser.sig_periodic_update.disconnect
             self.WorkerThread.quit()
-            if self.CONSOLE_VERBOSITY > 1: print("Worker Thread Quit")
+            if self.CONSOLE_VERBOSITY >= 2: print("Worker Thread Quit")
             self.unlock_ui()
             self.process_button.setText("Process Existing Log")
             if self.combat_session_data != []:

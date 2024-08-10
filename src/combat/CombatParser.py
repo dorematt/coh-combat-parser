@@ -495,7 +495,7 @@ class Parser(QObject):
     def set_player_name(self, player_name):
         '''Sets the player name'''
         self.PLAYER_NAME = player_name
-        if self.CONSOLE_VERBOSITY>= 2: print('          Player Name Updated to: ', self.PLAYER_NAME)
+        print('          Player Name Updated to: ', self.PLAYER_NAME)
         self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
 
 
