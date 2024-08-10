@@ -65,11 +65,11 @@ class Ability(QObject):
         '''Divides total damage by the number of hits to get the average damage for the ability.
         Will fall back to using the count if no hits are recorded, and return 0 if no damage or activations have been recorded.'''
         average = 0
-        hits = self.count if self.hits == 0 else self.hits
+        count = self.hits if self.count == 0 else self.count
         total = self.get_total_damage()
-        if  hits == 0 or total == 0:
+        if  count == 0 or total == 0:
             return 0
-        average = total / hits
+        average = total / count
 
         return round(average,2)
     
