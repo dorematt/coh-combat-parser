@@ -140,7 +140,7 @@ class MainUI(QMainWindow):
             button_layout = QHBoxLayout()
             button_layout.addWidget(self.start_stop_button)
             button_layout.addWidget(self.process_button)
-            button_layout.addWidget(self.run_test_button)
+            #button_layout.addWidget(self.run_test_button)
 
             combat_tree_layout = QHBoxLayout()
             # combat_tree_layout.columnCount = 5
@@ -158,8 +158,6 @@ class MainUI(QMainWindow):
 
         if self.settings.value("AutoUpdateLogFile", Globals.DEFAULT_AUTO_UPDATE_LOG_FILE, bool):
             self.last_file_path = self.check_for_latest_file(self.last_file_path)
-            if self.CONSOLE_VERBOSITY >= 2:
-                print("    Found more recent log file, updated: ", self.last_file_path)
 
         define_main_window()
         define_combat_session_tree()
@@ -441,6 +439,8 @@ class MainUI(QMainWindow):
         self.unlock_ui()
 
     def check_for_latest_file(self, file_path: str) -> str:
+        if file_path == "":
+            return ""
         # Convert the input path to a Path object
         original_file = Path(file_path)
 
