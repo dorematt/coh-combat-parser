@@ -10,12 +10,14 @@ class DamageComponent(QObject):
         self.total_damage = value
         self.highest_damage = 0
         self.lowest_damage = 0
+        self.last_damage = 0
     
     def add_damage(self, type, value : float):
         '''Adds damage value to the damage component'''
         self.count += 1
         self.total_damage += value
         self.total_damage = round(self.total_damage, 2)
+        self.last_damage = value
         self.update_min_max_damage(value)
     
     def get_dps(self, duration):
@@ -35,6 +37,9 @@ class DamageComponent(QObject):
     def get_damage(self):
         '''Returns the total damage for the damage component'''
         return self.total_damage
+    def get_last_damage(self):
+        '''Returns the last damage for the damage component'''
+        return self.last_damage
     def get_damage_component(self):
         return self
     def get_count(self):

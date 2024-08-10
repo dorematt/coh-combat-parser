@@ -1,4 +1,5 @@
 from  PyQt5.QtCore import QObject
+from combat.Character import Character
 class CombatSession(QObject):
     '''The CombatSession class stores data about a combat session, which is a period where damage events are registered.
     CombatSessions will automatically end based on the COMBAT_SESSION_TIMEOUT value to avoid including long downtime periods in the data.
@@ -9,7 +10,8 @@ class CombatSession(QObject):
         self.start_time = timestamp
         self.end_time = timestamp
         self.duration = 0 # Seconds
-        self.chars = {} # Stores a list of characters
+        self.chars = {} # Stores player and any pets involved in the session
+        self.targets = {} # Stores a list of targets hit in the sesison
         self.exp_value = 0
         self.inf_value = 0
         self.name = name
@@ -75,3 +77,19 @@ class CombatSession(QObject):
     
     def add_character(self, character):
         self.chars[character.get_name()] = character
+    
+    def check_in_char(self, name, type) -> bool:
+        '''Checks and adds the character to the session if they are not already in it, Returns True if the character was already in the session'''
+
+        assert type in ["player", "pet", "enemy"], "Invalid character type"
+
+        if type == "enemy":
+            if name not in self.targets:
+                self.targets[name] = Character(name, type)
+                return False
+            return True
+        else:
+            if name not in self.chars:
+                self.chars[name] = Character(name, type)
+                return False
+            return True

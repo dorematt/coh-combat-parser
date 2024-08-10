@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget, QFileDialog, QHBoxLayout, QTreeWidgetItemIterator
+from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget, QFileDialog, QHBoxLayout, QTreeWidgetItemIterator, QTabWidget
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
 from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
@@ -53,6 +53,7 @@ class MainUI(QMainWindow):
 
         # Initialization code here
         print("Initializing UI...")
+
         def define_main_window():
             # Set up the main window
             self.setGeometry(200, 200, 1400, 700)
@@ -63,7 +64,7 @@ class MainUI(QMainWindow):
             self.overall_dps_var = QLabel("DPS:")
 
             # File path input label and entry
-            self.file_path_label = QLabel("Log File Path:",)
+            self.file_path_label = QLabel("Log File Path:")
             self.browse_button = QPushButton("Browse", clicked=self.browse_file)
             self.settings_button = QPushButton("Settings", clicked=self.open_settings_window)
 
@@ -75,32 +76,10 @@ class MainUI(QMainWindow):
             self.run_test_button = QPushButton("Run Test", clicked=self.run_test_log)
 
 
-        def define_ability_tree():
-            # Main Ability Tree
-            self.ability_tree_display = QTreeWidget()
-            self.ability_tree_display.setSortingEnabled(True)
-            self.ability_tree_display.setHeaderLabels(["Name", "DPS", "Acc %", "Avg Per Hit", "Count", "Max", "Min", "Total", "Hits", "Tries"])
-            apply_header_style_fix(self.ability_tree_display)
-
-            self.ability_tree_display.setColumnWidth(0, 275)
-
-            self.ability_tree_display.setColumnWidth(1, 75)
-            self.ability_tree_display.setColumnWidth(2, 100)
-            self.ability_tree_display.setColumnWidth(3, 100)
-            self.ability_tree_display.setColumnWidth(4, 75)
-            self.ability_tree_display.setColumnWidth(5, 75)
-            self.ability_tree_display.setColumnWidth(6, 75)
-            self.ability_tree_display.setColumnWidth(7, 100)
-            self.ability_tree_display.setColumnWidth(8, 75)
-            self.ability_tree_display.setColumnWidth(9, 75)
-            self.ability_tree_display.setMinimumWidth(500)
-
-            # Set the default sort column to DPS
-            self.ability_tree_display.sortByColumn(1, Qt.DescendingOrder)
         def define_combat_session_tree():
             # Combat Session Tree
             self.combat_session_tree = QTreeWidget()
-            self.combat_session_tree.setHeaderLabels(["Session", "Duration","DPS", "EXP", "Inf"])
+            self.combat_session_tree.setHeaderLabels(["Session", "Duration", "DPS", "EXP", "Inf"])
             apply_header_style_fix(self.combat_session_tree)
             self.combat_session_tree.setColumnWidth(0, 150)
             self.combat_session_tree.setColumnWidth(1, 75)
@@ -113,8 +92,44 @@ class MainUI(QMainWindow):
             self.combat_session_tree.setMaximumWidth(500)
 
             self.combat_session_tree.itemSelectionChanged.connect(self.on_session_selection_change)
+
+        def define_ability_tree_tabs():
+            # Set up view tabs for the ability tree
+            self.view_tabs = QTabWidget()
+
+            # Create two separate ability tree displays for player and enemies
+            self.ability_tree_display_player = QTreeWidget()
+            self.ability_tree_display_enemies = QTreeWidget()
+
+            # Configure the columns for both trees (assuming they have the same structure)
+            for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies]:
+                tree_widget.setSortingEnabled(True)
+                tree_widget.setHeaderLabels([
+                    "Name", "DPS", "Acc %", "Avg Per Hit", "Count",
+                    "Max", "Min", "Total", "Hits", "Tries"
+                ])
+                apply_header_style_fix(tree_widget)
+
+                tree_widget.setColumnWidth(0, 275)
+                tree_widget.setColumnWidth(1, 75)
+                tree_widget.setColumnWidth(2, 100)
+                tree_widget.setColumnWidth(3, 100)
+                tree_widget.setColumnWidth(4, 75)
+                tree_widget.setColumnWidth(5, 75)
+                tree_widget.setColumnWidth(6, 75)
+                tree_widget.setColumnWidth(7, 100)
+                tree_widget.setColumnWidth(8, 75)
+                tree_widget.setColumnWidth(9, 75)
+                tree_widget.setMinimumWidth(500)
+
+                # Set the default sort column to DPS
+                tree_widget.sortByColumn(1, Qt.DescendingOrder)
+
+            # Add ability trees to the view tabs
+            self.view_tabs.addTab(self.ability_tree_display_player, "Player")
+            self.view_tabs.addTab(self.ability_tree_display_enemies, "Enemies")
+
         def setup_layout():
-    
             # Set up the layout
             browse_layout = QHBoxLayout()
             browse_layout.addWidget(self.file_path_label)
@@ -130,7 +145,7 @@ class MainUI(QMainWindow):
             combat_tree_layout = QHBoxLayout()
             # combat_tree_layout.columnCount = 5
             combat_tree_layout.addWidget(self.combat_session_tree)
-            combat_tree_layout.addWidget(self.ability_tree_display)
+            combat_tree_layout.addWidget(self.view_tabs)  # Add the view tabs to the layout
 
             main_layout = QVBoxLayout()
             main_layout.addLayout(browse_layout)
@@ -141,31 +156,30 @@ class MainUI(QMainWindow):
             central_widget.setLayout(main_layout)
             self.setCentralWidget(central_widget)
 
-
         if self.settings.value("AutoUpdateLogFile", Globals.DEFAULT_AUTO_UPDATE_LOG_FILE, bool):
             self.last_file_path = self.check_for_latest_file(self.last_file_path)
-            if self.CONSOLE_VERBOSITY >= 2: print("    Found more recent log file, updated: ", self.last_file_path)
+            if self.CONSOLE_VERBOSITY >= 2:
+                print("    Found more recent log file, updated: ", self.last_file_path)
 
         define_main_window()
-        define_ability_tree()
         define_combat_session_tree()
+        define_ability_tree_tabs()  # Initialize the view tabs
         setup_layout()
         apply_stylesheet(self)
-
 
         print("Done.")
 
 
     def start_worker_thread(self, file_path: str, live: bool):
         
-        print("Starting Worker Thread...")
+        if self.CONSOLE_VERBOSITY > 1: print("Starting Worker Thread...")
         self.WorkerThread = ParserThread(file_path, live)
         self.WorkerThread.parser.sig_finished.connect(self.on_worker_finished)
         self.WorkerThread.parser.sig_periodic_update.connect(lambda: self.on_sig_periodic_update(self.WorkerThread.parser.combat_session_data))
         self.sig_stop_monitoring.connect(self.WorkerThread.parser.on_sig_stop_monitoring)
         self.WorkerThread.start()
         self.settings.setValue("last_file_path", file_path)
-        print("Worker Thread Started: ", self.WorkerThread.isRunning())
+        if self.CONSOLE_VERBOSITY > 1: print("Worker Thread Started: ", self.WorkerThread.isRunning())
 
    # @pyqtSlot()
     def start_stop_log(self):
@@ -180,7 +194,8 @@ class MainUI(QMainWindow):
             self.start_stop_button.setEnabled(True)
             self.monitoring_live = True
             self.start_worker_thread(file_path, True)
-            self.ability_tree_display.clear()
+            self.ability_tree_display_player.clear()
+            self.ability_tree_display_enemies.clear()
             self.combat_session_tree.clear()
 
         else:
@@ -203,7 +218,8 @@ class MainUI(QMainWindow):
             self.process_button.setText("Stop Processing")
             self.lock_ui()
             self.start_worker_thread(file_path, False)
-            self.ability_tree_display.clear()
+            self.ability_tree_display_player.clear()
+            self.ability_tree_display_enemies.clear()
             self.combat_session_tree.clear()
             self.process_button.setEnabled(True)
 
@@ -221,7 +237,7 @@ class MainUI(QMainWindow):
             self.WorkerThread.parser.sig_finished.disconnect
             self.WorkerThread.parser.sig_periodic_update.disconnect
             self.WorkerThread.quit()
-            print("Worker Thread Quit")
+            if self.CONSOLE_VERBOSITY > 1: print("Worker Thread Quit")
             self.unlock_ui()
             self.process_button.setText("Process Existing Log")
             if self.combat_session_data != []:
@@ -334,7 +350,7 @@ class MainUI(QMainWindow):
 
             return character_item
 
-        def create_ability_item(parent_item, ability_name, duration):
+        def create_ability_item(parent_item:str, ability_name, duration):
             ability_item = QTreeWidgetItem(parent_item, [ability_name])
             ability_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+ability_name))
             ability_item.setData(1, Qt.DisplayRole, ability.get_dps(duration))
@@ -377,39 +393,43 @@ class MainUI(QMainWindow):
 
             return damage_item
 
-
         # asset mutex lock is in place
         assert not(self.combat_mutex.tryLock()), "UI Repopulation mutex not acquired"
+        for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies]:
 
-        tree_state = save_ability_tree_state(self.ability_tree_display)
-        current_column = self.ability_tree_display.header().sortIndicatorSection()
-        current_order = self.ability_tree_display.header().sortIndicatorOrder()
-        self.ability_tree_display.clear()
+            tree_state = save_ability_tree_state(tree_widget)
+            current_column = tree_widget.header().sortIndicatorSection()
+            current_order = tree_widget.header().sortIndicatorOrder()
+            tree_widget.clear()
 
-        # Repopulate the treeWidget
-        if session is None or session == []:
-            return
+            # Repopulate the treeWidget
+            if session is None or session == []:
+                return
 
-        duration = session.duration
+            if tree_widget == self.ability_tree_display_player:
+                char_list = session.chars
+            else:
+                char_list = session.targets
 
-        for character_name, character in session.chars.items():
-            character_item = create_character_item(self.ability_tree_display, character_name, duration)
+            duration = session.duration
+            for character_name, character in char_list.items():
+                character_item = create_character_item(tree_widget, character_name, duration)
 
-            for ability_name, ability in character.abilities.items():
-                ability_item = create_ability_item(character_item, ability_name, duration)
+                for ability_name, ability in character.abilities.items():
+                    ability_item = create_ability_item(character_item, ability_name, duration)
 
-                for damage_name in ability.damage:
-                    create_damage_item(ability_item, damage_name, duration)
+                    for damage_name in ability.damage:
+                        create_damage_item(ability_item, damage_name, duration)
 
-        # Set initial tree expansion
-        self.ability_tree_display.expandToDepth(0)
+            # Set initial tree expansion (player view only
+            if tree_widget == self.ability_tree_display_player: tree_widget.expandToDepth(0)
 
-        # Restore user tree state
-        restore_ability_tree_state(self.ability_tree_display, tree_state)
-        
-        # Restore user sorting
-        self.ability_tree_display.sortByColumn(current_column, current_order)
-        
+            # Restore user tree state
+            restore_ability_tree_state(tree_widget, tree_state)
+            
+            # Restore user sorting
+            tree_widget.sortByColumn(current_column, current_order)
+            
 
 
     def browse_file(self):
@@ -487,7 +507,8 @@ class MainUI(QMainWindow):
     def run_test_log(self):
         # Create a list of test data
         test_sessions = []
-        self.ability_tree_display.clear()
+        self.ability_tree_display_player.clear()
+        self.ability_tree_display_enemies.clear()
         self.combat_session_tree.clear()
 
         def pick_random_type():
@@ -540,7 +561,8 @@ class MainUI(QMainWindow):
         # Call the function to set up test data
         setup_test_data()
         self.combat_session_tree.clear()
-        self.ability_tree_display.clear()
+        self.ability_tree_display_player.clear()
+        self.ability_tree_display_enemies.clear()
         self.combat_session_tree.conn
         with QMutexLocker(self.combat_mutex):
             self.combat_session_data = test_sessions
