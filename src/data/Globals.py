@@ -1,6 +1,6 @@
 class Globals:
     import os
-    VERSION = "0.0.6"
+    VERSION = "0.1.0"
     BUILD_DATE = "10 Aug 2024"
     BUILD_TYPE = "ALPHA"
     AUTHOR = "@10kVolts"

@@ -1,0 +1,9 @@
+pyinstaller --onefile --icon=H:\01_PROJECTS\GitHub\coh-combat-parser\src\ui\iconicon_256.ico --distpath=H:\01_PROJECTS\GitHub\coh-combat-parser\dist H:\01_PROJECTS\GitHub\coh-combat-parser\src\CoH_Parser.py
+
+pyinstaller --onefile --noconsole --exclude-module qmlls --icon=H:\01_PROJECTS\GitHub\coh-combat-parser\src\ui\icon\icon_256.ico --distpath=H:\01_PROJECTS\GitHub\coh-combat-parser\dist H:\01_PROJECTS\GitHub\coh-combat-parser\src\CoH_Parser.py
+
+pyinstaller --onefile H:\01_PROJECTS\GitHub\coh-combat-parser\src\CoH_Parser.py --specpath ./specfile --noconfirm
+
+
+To build form the specfile
+    pyinstaller H:\01_PROJECTS\GitHub\coh-combat-parser\specfile\CoH_Parser.spec
