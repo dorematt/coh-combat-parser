@@ -47,7 +47,7 @@ class Parser(QObject):
         '''Resets all the parser variables to their default values. This is called when a new log file is loaded or when the parser is reset'''
         self.line_count = 0
         self.combat_session_data = [] # Stores a list of combat sessions
-        self.no_hitroll_ability_list = [] # Stores a list of abilities that have no hit roll events (ie. were discovered and added using a damage event)
+        self.no_hitroll_ability_list = {} # Stores a list of abilities that have no hit roll events (ie. were discovered and added using a damage event)
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
         self.session_name_count = 0 # For counting the number of sessions with the same name
         self.combat_session_live = False # Flag to indicate if a combat session is active
@@ -350,7 +350,9 @@ class Parser(QObject):
                 else:
                     proc_name = data["ability"]
                 caster.last_ability.add_damage(DamageComponent(proc_name),damage)
-                target.last_ability.add_damage(DamageComponent(proc_name),damage)
+                
+                if target.last_ability is not None:
+                    target.last_ability.add_damage(DamageComponent(proc_name),damage)
                 # print('         Damage Proc', proc_name,'Added to ', self.active_ability.name, "with value", damage, "and total damage of:", self.active_ability.get_total_damage(), 'Count: ', self.active_ability.damage[-1].count)
                 return
         
@@ -360,10 +362,11 @@ class Parser(QObject):
             
             if char_ability not in char.abilities:
                 char.abilities[char_ability] = Ability(char_ability)
-                if self.CONSOLE_VERBOSITY >= 3:
+                if self.CONSOLE_VERBOSITY >= 2:
                     print(f"     Added Ability: {char_ability} to Character: {char.get_name()} via Damage Event")
 
             char_ability = char.get_ability(char_ability)
+            caster_ability = caster.get_ability(this_ability)
 
 
             char_ability.add_damage(DamageComponent(type), damage)
@@ -371,12 +374,16 @@ class Parser(QObject):
                     print ('         Damage Component Added to ', char.get_name(),': ', char_ability.damage[-1].type, char_ability.damage[-1].get_last_damage(), 'Count: ', char_ability.damage[-1].count)
 
             # Some DoT auras don't have hit rolls recorded in the log when they hit, so we'll put those abilities in a list to add successful hit events via damage events instead
-            if not proc and char_ability.get_hits() == 0:
-                self.no_hitroll_ability_list.append(char_ability)
+            if not proc and caster_ability.get_hits() == 0:
+                    if any(word in char_ability.get_name() for word in Globals.NO_HIT_ABILITIES): 
+                        self.no_hitroll_ability_list[char_ability] = False # This ability is auto-hit and should not be included in hit-roll stats
+                    else:
+                        self.no_hitroll_ability_list[char_ability] = True # This ability is dependent on a hit-roll and should be included in hit-roll stats
             
             if char_ability in self.no_hitroll_ability_list:
                 char_ability.ability_used()
-                char_ability.ability_hit(True)
+                if self.no_hitroll_ability_list[char_ability]: 
+                    char_ability.ability_hit(True)
 
             char.last_ability = char_ability
 

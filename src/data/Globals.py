@@ -14,3 +14,5 @@ class Globals:
     DEFAULT_ASSOCIATE_PROCS_TO_POWERS = True
     DEFAULT_CONSOLE_VERBOSITY = 1
     DEFAULT_AUTO_UPDATE_LOG_FILE = True
+
+    NO_HIT_ABILITIES = ["Interface", "Shifting Tides"]
