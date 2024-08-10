@@ -22,7 +22,7 @@ class Parser(QObject):
     monitoring_live = False # Flag to indicate if the parser is monitoring a live log file
     processing_live = False # Flag to indicate when processing is active (or used to terminate processing)
     combat_session_data = [] # Stores a list of combat sessions
-    mutex = QMutex()
+    combat_mutex = QMutex()
     sig_finished = pyqtSignal(list)
     sig_periodic_update = pyqtSignal(list)
     parentThread = None
@@ -156,7 +156,7 @@ class Parser(QObject):
         # Check for an active combat session and determine if it is still active
 
         # Update the current time and check combat session status
-        with QMutexLocker(self.mutex):
+        with QMutexLocker(self.combat_mutex):
             self.update_global_time(self.convert_timestamp(data["date"], data["time"]))
             timestamp = self.GLOBAL_CURRENT_TIME
             status = self.check_session(timestamp)
@@ -280,7 +280,7 @@ class Parser(QObject):
 
     def handle_event_player_damage(self, data, pet=False):
         '''Handles a player damage event found by the interpret_event function.
-        This function will also handle damage from proc effects, if the setting is enabled it will associate the proc damage with the last used ability'''
+        This function will also handle damage from procs and either handle them as separate or associate them with the last used ability depending on the settings.'''
         
         # Ignore events where the player hits themselves
         if data["target"] == self.PLAYER_NAME:
@@ -350,7 +350,7 @@ class Parser(QObject):
         if this_ability in self.no_hitroll_ability_list:
             this_ability.ability_used()
             this_ability.ability_hit(True)
-        
+
         caster.last_ability = this_ability
 
   
@@ -544,7 +544,7 @@ class Parser(QObject):
                 self.interval_timer.stop()
                 self.final_update = False
 
-        with QMutexLocker(self.mutex):
+        with QMutexLocker(self.combat_mutex):
             if self.combat_session_data == []:
                 session = []
             else:

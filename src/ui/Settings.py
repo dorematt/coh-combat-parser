@@ -57,6 +57,20 @@ class SettingsWindow(QDialog):
         proc_layout.addWidget(proc_checkbox)
         layout.addLayout(proc_layout)
 
+        # Automatically update to latest file
+        tooltip = "Automatically check and set the filepath to the latest log file"
+        auto_update_label = QLabel("Get Latest Log File:")
+        auto_update_label.setToolTip(tooltip)
+
+        auto_update_checkbox = QCheckBox()
+        auto_update_checkbox.setToolTip(tooltip)
+        auto_update_checkbox.setChecked(self.settings.value("AutoUpdateLogFile", Globals.DEFAULT_AUTO_UPDATE_LOG_FILE, bool))
+  
+        auto_update_layout = QHBoxLayout()
+        auto_update_layout.addWidget(auto_update_label)
+        auto_update_layout.addWidget(auto_update_checkbox)
+        layout.addLayout(auto_update_layout)
+        
         # Console Verbosity
         tooltip = "The amount of information to display in the console - For Debug purposes only, this WILL impact performance"
         verbosity_label = QLabel("Console Verbosity:")
@@ -70,8 +84,6 @@ class SettingsWindow(QDialog):
         verbosity_spinbox.setValue(self.settings.value("ConsoleVerbosity", Globals.DEFAULT_CONSOLE_VERBOSITY, int))
         verbosity_spinbox.valueChanged.connect(self.save_console_verbosity)
         layout.addWidget(verbosity_spinbox)
-
-        
 
         # Save button
         save_button = QPushButton("Save")
@@ -104,6 +116,9 @@ class SettingsWindow(QDialog):
 
     def save_associate_procs_to_powers(self, value):
         self.settings.setValue("AssociateProcsToPowers", value)
+
+    def save_auto_update_log_file(self, value):
+        self.settings.setValue("AutoUpdateLogFile", value)
         
     def save_settings(self):
         self.settings.sync()

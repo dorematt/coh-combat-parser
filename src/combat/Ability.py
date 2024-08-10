@@ -67,7 +67,7 @@ class Ability(QObject):
         average = 0
         hits = self.count if self.hits == 0 else self.hits
         total = self.get_total_damage()
-        if  hits or total == 0:
+        if  hits == 0 or total == 0:
             return 0
         average = total / hits
 

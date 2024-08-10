@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QGridLayout, QWidget, QFileDialog, QHBoxLayout
+from PyQt5.QtWidgets import QMessageBox, QSizePolicy, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget, QFileDialog, QHBoxLayout, QTreeWidgetItemIterator
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSlot, QMutex, QMutexLocker, pyqtSignal, QSettings
 from combat.CombatParser import Parser, CombatSession, Character, Ability, DamageComponent
@@ -7,7 +7,8 @@ from data.Globals import Globals
 import random
 from ui.Settings import SettingsWindow
 from ui.style.Theme import apply_stylesheet, apply_header_style_fix
-import os.path
+import os
+from pathlib import Path
 
 class ParserThread(QThread):
     sig_process_live_log = pyqtSignal(str)
@@ -40,10 +41,11 @@ class MainUI(QMainWindow):
     sig_stop_monitoring = pyqtSignal()
     sig_run = pyqtSignal(str)
     sig_run_live = pyqtSignal(str)
-    mutex = QMutex()
+    combat_mutex = QMutex() # the lock for interacting with combat session data
     # sig_terminate_processing = pyqtSignal()
     settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
     last_file_path = settings.value("last_file_path", "", type=str)
+    CONSOLE_VERBOSITY = settings.value("ConsoleVerbosity", Globals.DEFAULT_CONSOLE_VERBOSITY, int)
 
 
     def __init__(self,):
@@ -140,6 +142,9 @@ class MainUI(QMainWindow):
             self.setCentralWidget(central_widget)
 
 
+        if self.settings.value("AutoUpdateLogFile", Globals.DEFAULT_AUTO_UPDATE_LOG_FILE, bool):
+            self.last_file_path = self.check_for_latest_file(self.last_file_path)
+            if self.CONSOLE_VERBOSITY >= 2: print("    Found more recent log file, updated: ", self.last_file_path)
 
         define_main_window()
         define_ability_tree()
@@ -150,13 +155,6 @@ class MainUI(QMainWindow):
 
         print("Done.")
 
-    def browse_file(self):
-        self.lock_ui()
-        file_path, _ = QFileDialog.getOpenFileName(directory=self.last_file_path, filter="Text Files (*.txt)")
-        if file_path != "":
-            self.file_path_var.setText(file_path)
-            self.settings.setValue("last_file_path", file_path)
-        self.unlock_ui()
 
     def start_worker_thread(self, file_path: str, live: bool):
         
@@ -166,6 +164,7 @@ class MainUI(QMainWindow):
         self.WorkerThread.parser.sig_periodic_update.connect(lambda: self.on_sig_periodic_update(self.WorkerThread.parser.combat_session_data))
         self.sig_stop_monitoring.connect(self.WorkerThread.parser.on_sig_stop_monitoring)
         self.WorkerThread.start()
+        self.settings.setValue("last_file_path", file_path)
         print("Worker Thread Started: ", self.WorkerThread.isRunning())
 
    # @pyqtSlot()
@@ -216,7 +215,7 @@ class MainUI(QMainWindow):
 
 
     def on_worker_finished(self, data):
-        with QMutexLocker(self.mutex):
+        with QMutexLocker(self.combat_mutex):
             self.combat_session_data = data
             self.sig_run.disconnect
             self.WorkerThread.parser.sig_finished.disconnect
@@ -232,26 +231,48 @@ class MainUI(QMainWindow):
 
     @pyqtSlot()
     def on_sig_periodic_update(self, data):
-        with QMutexLocker(self.mutex):
+        '''Signal to update the UI with the latest data from the parser thread'''
+        with QMutexLocker(self.combat_mutex):
+            
             self.combat_session_data = data
             if data == [] or self.combat_session_data is None:
                 self.selected_session = []
+            #check if user has selected a session, if they have, keep it selected
             else:
                 self.selected_session = self.combat_session_data[-1]
+
             self.repopulate_sessions(self.combat_session_data)
             self.repopulate(self.selected_session)
+            self
         
     def on_session_selection_change(self):
         '''Handles the event when a combat session is selected in the treeWidget'''
         if self.combat_session_tree.selectedItems():
-            with QMutexLocker(self.mutex):
+            with QMutexLocker(self.combat_mutex):
                 selected_index = self.combat_session_tree.selectedIndexes()[0].row()
                 self.selected_session = self.combat_session_data[selected_index]
                 self.repopulate(self.selected_session)
+    
+
+
+    def update_or_create_item(tree_widget, parent_item, text_list, unique_key):
+        """Update an existing item or create a new one if it doesn't exist."""
+        items = tree_widget.findItems(unique_key, Qt.MatchExactly | Qt.MatchRecursive, 0)
+        if items:
+            item = items[0]
+        else:
+            item = QTreeWidgetItem(parent_item, text_list)
+            item.setText(0, unique_key)
+        for i, text in enumerate(text_list):
+            item.setText(i, text)
+        return item
 
     def repopulate_sessions(self, combat_session_list: list):
         '''Populates the treeWidget with data from the provided list of combat sessions. This should only be called while under a mutex lock'''
-        # Clear the treeWidget
+        assert not(self.combat_mutex.tryLock()), "UI Repopulation mutex not acquired"
+
+
+        # Clear the treeWidget and rebuild
         self.combat_session_tree.clear()
         if combat_session_list == []: return
         for session, combat_session in enumerate(combat_session_list, start=1):
@@ -262,17 +283,40 @@ class MainUI(QMainWindow):
             session_item.setText(3, "{:,}".format(combat_session.get_exp()))
             session_item.setText(4, "{:,}".format(combat_session.get_inf()))
 
+
     def repopulate(self, session):
-        '''Populates the ability tree with data from the provided combat session. This should only be called while under a mutex lock'''
+        '''This is the main function to clear and populate the ability tree with data from the provided combat session. This should only be called while under a mutex lock
+        TODO: Make this more efficient by only updating the changed data, rather than clearing and repopulating the entire treeWidget'''
+
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
             for i in range(10):
                 item.setFont(i, QFont("Fira Sans Medium", font_size, QFont.Bold if is_bold else QFont.Normal))
                 if background_color:
                     item.setBackground(i, background_color)
 
+        def save_ability_tree_state(tree_widget):
+            item_state = {}
+            iterator = QTreeWidgetItemIterator(tree_widget)
+            while iterator.value():
+                item = iterator.value()
+                id = item.data(0,Qt.UserRole)
+                item_state[id] = item.isExpanded()
+                iterator += 1
+            return item_state
+
+        def restore_ability_tree_state(tree_widget, expanded_items):
+            iterator = QTreeWidgetItemIterator(tree_widget)
+            while iterator.value():
+                item = iterator.value()
+                id = item.data(0,Qt.UserRole)
+                if id in expanded_items:
+                    item.setExpanded(expanded_items[id])
+                iterator += 1
+                
         def create_character_item(tree_widget, character_name, duration):
             character_item = QTreeWidgetItem(tree_widget, [character_name])
             set_styling(character_item, font_size=11, is_bold=True, background_color=QColor(25, 25, 25))
+            character_item.setData(0, Qt.UserRole, character_name)
             character_item.setData(1, Qt.DisplayRole, character.get_dps(duration))
             character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
             character_item.setData(3, Qt.DisplayRole, "{:,}".format(character.get_average_damage()))
@@ -292,6 +336,7 @@ class MainUI(QMainWindow):
 
         def create_ability_item(parent_item, ability_name, duration):
             ability_item = QTreeWidgetItem(parent_item, [ability_name])
+            ability_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+ability_name))
             ability_item.setData(1, Qt.DisplayRole, ability.get_dps(duration))
             ability_item.setData(2, Qt.DisplayRole, "{:,}%".format(ability.get_accuracy()))
             ability_item.setData(3, Qt.DisplayRole, "{:,}".format(ability.get_average_damage()))
@@ -314,11 +359,13 @@ class MainUI(QMainWindow):
 
         def create_damage_item(parent_item, damage_name, duration):
             damage_item = QTreeWidgetItem(parent_item, [damage_name.name])
+            damage_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+damage_name.name))
             damage_item.setData(1, Qt.DisplayRole,damage_name.get_dps(duration))
             damage_item.setData(3, Qt.DisplayRole, "{:,}".format(damage_name.get_average_damage()))
             damage_item.setData(4, Qt.DisplayRole, "{:,}".format(damage_name.get_count()))
             damage_item.setData(5, Qt.DisplayRole, "{:,}".format(damage_name.get_highest_damage()))
             damage_item.setData(6, Qt.DisplayRole, "{:,}".format(damage_name.get_lowest_damage()))
+            damage_item.setData(7, Qt.DisplayRole, "{:,}".format(damage_name.get_damage()))
             
 
             damage_item.setTextAlignment(2, Qt.AlignCenter)
@@ -326,10 +373,15 @@ class MainUI(QMainWindow):
             damage_item.setTextAlignment(4, Qt.AlignCenter)
             damage_item.setTextAlignment(5, Qt.AlignCenter)
             damage_item.setTextAlignment(6, Qt.AlignCenter)
+            damage_item.setTextAlignment(7, Qt.AlignCenter)
 
             return damage_item
 
 
+        # asset mutex lock is in place
+        assert not(self.combat_mutex.tryLock()), "UI Repopulation mutex not acquired"
+
+        tree_state = save_ability_tree_state(self.ability_tree_display)
         current_column = self.ability_tree_display.header().sortIndicatorSection()
         current_order = self.ability_tree_display.header().sortIndicatorOrder()
         self.ability_tree_display.clear()
@@ -349,9 +401,51 @@ class MainUI(QMainWindow):
                 for damage_name in ability.damage:
                     create_damage_item(ability_item, damage_name, duration)
 
+        # Set initial tree expansion
         self.ability_tree_display.expandToDepth(0)
-        self.ability_tree_display.sortByColumn(current_column, current_order)
 
+        # Restore user tree state
+        restore_ability_tree_state(self.ability_tree_display, tree_state)
+        
+        # Restore user sorting
+        self.ability_tree_display.sortByColumn(current_column, current_order)
+        
+
+
+    def browse_file(self):
+        self.lock_ui()
+        file_path, _ = QFileDialog.getOpenFileName(directory=self.last_file_path, filter="Text Files (*.txt)")
+        if file_path != "":
+            self.file_path_var.setText(file_path)
+            self.settings.setValue("last_file_path", file_path)
+        self.unlock_ui()
+
+    def check_for_latest_file(self, file_path: str) -> str:
+        # Convert the input path to a Path object
+        original_file = Path(file_path)
+
+        # Get the directory containing the file
+        directory = original_file.parent
+
+        # Get the creation time of the original file
+        original_creation_time = original_file.stat().st_ctime
+
+        # Initialize a variable to keep track of the most recent file
+        most_recent_file = original_file
+        most_recent_time = original_creation_time
+
+        # Iterate over all .txt files in the directory
+        for file in directory.glob('*.txt'):
+            # Check the creation time of the current file
+            creation_time = file.stat().st_ctime
+
+            # Update the most recent file if this one is newer
+            if creation_time > most_recent_time:
+                most_recent_file = file
+                most_recent_time = creation_time
+
+        # Return the path of the most recent file
+        return str(most_recent_file)
 
     def open_settings_window(self):
         self.settings_window = SettingsWindow()
@@ -445,10 +539,13 @@ class MainUI(QMainWindow):
 
         # Call the function to set up test data
         setup_test_data()
-        with QMutexLocker(self.mutex):
+        self.combat_session_tree.clear()
+        self.ability_tree_display.clear()
+        self.combat_session_tree.conn
+        with QMutexLocker(self.combat_mutex):
             self.combat_session_data = test_sessions
             # Populate the tree with test data
-            self.repopulate_sessions(self.combat_session_data)
+            # self.repopulate_sessions(self.combat_session_data)
 
 
 if __name__ == "__main__":
