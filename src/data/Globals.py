@@ -1,7 +1,7 @@
 class Globals:
     import os
-    VERSION = "0.1.0"
-    BUILD_DATE = "10 Aug 2024"
+    VERSION = "0.1.1"
+    BUILD_DATE = "11 Aug 2024"
     BUILD_TYPE = "ALPHA"
     AUTHOR = "@10kVolts"
     APPLICATION_NAME = "coh-combat-parser"
