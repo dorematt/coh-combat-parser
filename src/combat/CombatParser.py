@@ -342,21 +342,25 @@ class Parser(QObject):
         caster = this_session.chars[caster]
         target = this_session.targets[target]
         
+        if proc:
+            if flair != "": 
+                proc_name = (data["ability"] + " (" + data["damage_flair"] + ")")
+            else:
+                proc_name = data["ability"] 
 
-        if proc and caster.last_ability is not None:
-            if self.associating_procs:
-                if flair != "": 
-                    proc_name = (data["ability"] + " (" + data["damage_flair"] + ")")
-                else:
-                    proc_name = data["ability"]
+            if caster.last_ability is not None and self.associating_procs: # We'll check and process procs first
+
                 caster.last_ability.add_damage(DamageComponent(proc_name),damage)
                 
                 if target.last_ability is not None:
                     target.last_ability.add_damage(DamageComponent(proc_name),damage)
-                # print('         Damage Proc', proc_name,'Added to ', self.active_ability.name, "with value", damage, "and total damage of:", self.active_ability.get_total_damage(), 'Count: ', self.active_ability.damage[-1].count)
                 return
+            elif damage == 0: 
+                if self.CONSOLE_VERBOSITY >= 2: print(f"Ignoring zero-damage proc event: {data['ability']} on {data['target']}")
+                return 
+            
         
-        # Add the ability information to each character's ability list along with damage
+        # Find ability in char list and add damage component
         for char in [caster, target]:
             char_ability = this_ability
             
@@ -379,7 +383,11 @@ class Parser(QObject):
                         self.no_hitroll_ability_list[char_ability] = False # This ability is auto-hit and should not be included in hit-roll stats
                     else:
                         self.no_hitroll_ability_list[char_ability] = True # This ability is dependent on a hit-roll and should be included in hit-roll stats
-            
+
+            elif proc and char_ability.get_hits() == 0: #This handles incrementing activation counts for procs when associating_procs setting is off
+                self.no_hitroll_ability_list[char_ability] = False
+
+            # Finally, check the no_hitroll list and add activation and hit events as needed
             if char_ability in self.no_hitroll_ability_list:
                 char_ability.ability_used()
                 if self.no_hitroll_ability_list[char_ability]: 

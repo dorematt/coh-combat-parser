@@ -334,6 +334,7 @@ class MainUI(QMainWindow):
             character_item.setData(1, Qt.DisplayRole, character.get_dps(duration))
             character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
             character_item.setData(3, Qt.DisplayRole, character.get_average_damage())
+            character_item.setData(4, Qt.DisplayRole, character.get_count())
             character_item.setData(7, Qt.DisplayRole, int(character.get_total_damage()))
             character_item.setData(8, Qt.DisplayRole, character.get_hits())
             character_item.setData(9, Qt.DisplayRole, character.get_tries())
