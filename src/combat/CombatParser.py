@@ -205,9 +205,10 @@ class Parser(QObject):
                     data["inf_value"] = ""
                 self.handle_event_reward_gain(data)
 
-            elif event == "player_name": # This catches the welcome message that includes the player name either at the start of the log, or further down should the player log out and back in
-                self.set_player_name(data["player_name"])
-                self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
+            elif event == "player_name" or event == "player_name_backup": # This catches the welcome message that includes the player name either at the start of the log, or further down should the player log out and back in
+                if self.PLAYER_NAME == "" or self.PLAYER_NAME != data["player_name"]: 
+                    self.set_player_name(data["player_name"])
+                    self.PATTERNS = self.update_regex_player_name(self.PLAYER_NAME)
             
             elif event == "command":
                 if self.PLAYER_NAME == "": 
@@ -502,11 +503,12 @@ class Parser(QObject):
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             for line in reversed(list(file)):
                 event, data = self.extract_from_line(line)
-                if event == "player_name":
+                if event == "player_name" or event == "player_name_backup":
                     print ('          Player Name Located: ', data["player_name"])
                     return data["player_name"]
-        print('          Unable to find Player Name in log')
-        return ""
+
+        print('          Unable to find Player Name in log, defaulting to "Player"')
+        return "Player"
     def set_player_name(self, player_name):
         '''Sets the player name'''
         self.PLAYER_NAME = player_name

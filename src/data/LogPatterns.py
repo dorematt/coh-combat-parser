@@ -45,6 +45,9 @@ PATTERNS = {
     "player_name": re.compile( # Matches a welcome message that includes the player name
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) Welcome to City of .*?, (?P<player_name>.+?)!"
     ),
+    "player_name_backup": re.compile( # Backup method to capture player name from Stamina autohit, which should be pretty universal across characters
+         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<outcome>HIT|MISS(?:ED)?) (?P<player_name>[^.!]+)(?:!!|!) Your Stamina power is autohit."
+    ),
     "command": re.compile( # Matches a command message in chat
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) \[(?:Local|SuperGroup)\] (?P<player>.+?): .*?##(?P<command>\S+) (?P<value>.*)"
     ),
