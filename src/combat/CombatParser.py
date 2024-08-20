@@ -501,13 +501,13 @@ class Parser(QObject):
         
         # Open the log file then read each line from bottom up to match the last player_name pattern
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
-            for line in reversed(list(file)):
+            for line in list(file):
                 event, data = self.extract_from_line(line)
                 if event == "player_name" or event == "player_name_backup":
                     print ('          Player Name Located: ', data["player_name"])
                     return data["player_name"]
 
-        print('          Unable to find Player Name in log, defaulting to "Player"')
+        print('          Unable to find Player Name in log file')
         return "Player"
     def set_player_name(self, player_name):
         '''Sets the player name'''
