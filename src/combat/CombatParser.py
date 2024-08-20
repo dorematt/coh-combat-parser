@@ -361,7 +361,10 @@ class Parser(QObject):
                 return 
             
         
-        # Find ability in char list and add damage component
+        
+        current_char = caster # The loop below will run twice, once for the caster and once for the target, this variable will keep track of which character is being processed
+
+        # Find ability in char list and add damage component, both for caster and the target
         for char in [caster, target]:
             char_ability = this_ability
             
@@ -378,7 +381,7 @@ class Parser(QObject):
             if self.CONSOLE_VERBOSITY >= 3: 
                     print ('         Damage Component Added to ', char.get_name(),': ', char_ability.damage[-1].type, char_ability.damage[-1].get_last_damage(), 'Count: ', char_ability.damage[-1].count)
 
-            # Some DoT auras don't have hit rolls recorded in the log when they hit, so we'll put those abilities in a list to add successful hit events via damage events instead
+            # Some DoT auras don't have hit rolls recorded in the log when they hit, so we'll put those abilities in a list to treat damage events as successful hits as well
             if not proc and caster_ability.get_hits() == 0:
                     if any(word in char_ability.get_name() for word in Globals.NO_HIT_ABILITIES): 
                         self.no_hitroll_ability_list[char_ability] = False # This ability is auto-hit and should not be included in hit-roll stats
@@ -388,13 +391,18 @@ class Parser(QObject):
             elif proc and char_ability.get_hits() == 0: #This handles incrementing activation counts for procs when associating_procs setting is off
                 self.no_hitroll_ability_list[char_ability] = False
 
+
             # Finally, check the no_hitroll list and add activation and hit events as needed
             if char_ability in self.no_hitroll_ability_list:
                 char_ability.ability_used()
                 if self.no_hitroll_ability_list[char_ability]: 
                     char_ability.ability_hit(True)
+            
+            elif current_char == target and not proc: # This is so power activations that are counted in a separate event can be mapped to the correct ability and enemy target
+                char_ability.ability_used()
 
             char.last_ability = char_ability
+            if current_char == caster: current_char = target # Switch to the target for the second loop
 
 
   
