@@ -31,17 +31,7 @@ class SettingsWindow(QDialog):
         timeout_spinbox.valueChanged.connect(self.save_combat_session_timeout)
         self.layout.addWidget(timeout_spinbox)
 
-        # Combat Session Name
-        tooltip = "This is the default name for a combat session.  It can be overridden by in-game chat commands"
-        name_label = QLabel("Default Session Name:")
-        name_label.setToolTip(tooltip)
-        self.layout.addWidget(name_label)
 
-        name_lineedit = QLineEdit()
-        name_lineedit.setToolTip(tooltip)
-        name_lineedit.setText(self.settings.value("CombatSessionName", Globals.DEFAULT_COMBAT_SESSION_NAME, str))
-        name_lineedit.textChanged.connect(self.save_combat_session_name)
-        self.layout.addWidget(name_lineedit)
 
         #Associate Procs to Powers
         tooltip = "Toggle whether to associate procs to powers or make them their own ability"
@@ -99,7 +89,7 @@ class SettingsWindow(QDialog):
         self.naming_combobox.addItem("Timestamp")
         self.naming_combobox.addItem("First Enemy Damaged")
         self.naming_combobox.addItem("Highest Damaged Enemy")
-        self.naming_combobox.setCurrentIndex(self.settings.value("DefaultSessionNaming", 0, int))
+        self.naming_combobox.setCurrentIndex(self.settings.value("DefaultSessionNaming", Globals.DEFAULT_COMBAT_SESSION_OPTION, int))
         self.naming_combobox.currentIndexChanged.connect(self.update_user_default_session_name)
         self.sesison_name_layout.addWidget(self.naming_combobox)
 
@@ -145,8 +135,6 @@ class SettingsWindow(QDialog):
     def save_combat_session_timeout(self, value):
         self.settings.setValue("CombatSessionTimeout", value)
 
-    def save_combat_session_name(self, text):
-        self.settings.setValue("CombatSessionName", text)
 
     def save_console_verbosity(self, value):
         self.settings.setValue("ConsoleVerbosity", value)
@@ -158,7 +146,6 @@ class SettingsWindow(QDialog):
         self.settings.setValue("AutoUpdateLogFile", value)
     
     def update_user_default_session_name(self, index):
-        print ("User Selected Index: ", index)
         if index == 0:
             self.user_prefix_lineedit.setEnabled(True)
             self.user_prefix_lineedit.setVisible(True)
@@ -169,6 +156,7 @@ class SettingsWindow(QDialog):
             self.user_prefix_label.setVisible(False)
             
         self.settings.setValue("DefaultSessionNaming", self.naming_combobox.currentIndex())
+        #print ("User Selected Index: ", self.settings.value("DefaultSessionNaming", Globals.DEFAULT_COMBAT_SESSION_OPTION, int))
 
     def update_user_prefix(self, text):
         self.settings.setValue("UserSpecifiedNamePrefix", text)

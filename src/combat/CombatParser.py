@@ -50,6 +50,7 @@ class Parser(QObject):
         self.no_hitroll_ability_list = {} # Stores a list of abilities that have no hit roll events (ie. were discovered and added using a damage event)
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
         self.session_name_count = 0 # For counting the number of sessions with the same name
+        self.session_name_override = False # Flag to indicate if the user has overridden the default session naming via a chat command
         self.combat_session_live = False # Flag to indicate if a combat session is active
         self.in_combat = False # Flag to indicate that the player is/has dealing damage
         self.global_combat_duration = 0 # Stores the total durations of all combat sessions
@@ -94,14 +95,29 @@ class Parser(QObject):
         return '',[]
 
     def new_session(self, timestamp):
+        '''Creates a new combat session and adds it to the combat_session_data list, determines the name of the session based on user settings'''
         self.session_count += 1
-        if self.user_session_name == "": 
-            self.session_name_count +=1
-            name = self.COMBAT_SESSION_NAME + " " + str(self.session_name_count)
+        self.session_name_count +=1
+        setting = self.COMBAT_SESSION_OPTION # Check the user's default session naming behaviour
+
+        if self.session_name_override: # First check if a command override for the name has been set
+            name = self.user_session_name
+        elif setting == 0: # User Specified
+            name = self.COMBAT_SESSION_NAME
+        elif setting == 1: # Player Name
+            name = self.PLAYER_NAME
+        elif setting == 2: # Timestamp
+            dt = datetime.fromtimestamp(timestamp)
+            name = dt.strftime('%H:%M:%S')
+        elif setting == 3: # First Enemy Damaged
+            name = self.COMBAT_SESSION_NAME
+        elif setting == 4: # Highest Damaged Enemy
+            name = self.COMBAT_SESSION_NAME
         else:
-            self.session_name_count += 1
-            name = self.user_session_name + " " + str(self.session_name_count)
-        self.combat_session_data.append(CombatSession(timestamp,name))
+            name = self.COMBAT_SESSION_NAME
+            print("    WARNING    Unable to determine the settings for session naming, using default session name: ", name)
+            
+        self.combat_session_data.append(CombatSession(timestamp, name, self.session_name_count, self.session_name_override))
         self.combat_session_live = True
         self.in_combat = False
         if self.monitoring_live: self.interval_timer.start() # Begins periodic UI refreshes
@@ -126,7 +142,7 @@ class Parser(QObject):
     
     def end_current_session(self):
         '''Ends the current combat session'''
-        self.combat_session_data[-1].update_duration()
+        self.combat_session_data[-1].end_session()
         self.combat_session_live = False
         self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
         if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
@@ -426,12 +442,14 @@ class Parser(QObject):
     def handle_event_command(self, data):
         if data["command"] == "SET_NAME":
             self.user_session_name = data["value"]
+            self.session_name_override = True
             self.session_name_count = 0
-            if self.CONSOLE_VERBOSITY >= 2 or self.monitoring_live: print ("          Setting Session Name to: ", self.user_session_name, '\n')
+            if self.CONSOLE_VERBOSITY >= 1 or self.monitoring_live: print ("          Overriding Sesison names to: ", self.user_session_name, '\n')
             if self.combat_session_live:
                 self.session_name_count += 1
-                self.combat_session_data[-1].set_name(data["value"] + " " + str(self.session_name_count))
-                if self.monitoring_live: print ("Updated Active Combat Session Name: ", self.combat_session_data[-1].get_name(), '\n')
+                self.combat_session_data[-1].set_name_override(True)
+                self.combat_session_data[-1].set_name(self.user_session_name, self.session_name_count)
+
         elif data["command"] == "START_SESSION":
 
             if self.combat_session_live:
@@ -534,7 +552,7 @@ class Parser(QObject):
     
         self.clean_variables()
 
-        if self.settings.value("AssociateProcsToPowers", True, bool):
+        if self.settings.value("AssociateProcsToPowers", Globals.DEFAULT_ASSOCIATE_PROCS_TO_POWERS, bool):
             self.associating_procs = True
         else:
             self.associating_procs = False
@@ -558,6 +576,11 @@ class Parser(QObject):
                     refresher = 0
                     QCoreApplication.processEvents()
                     if not self.processing_live: break
+
+        if self.combat_session_live:
+            self.end_current_session()
+            self.print_session_results(self.combat_session_data[-1])
+            
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
         self.sig_finished.emit(self.combat_session_data)
         return True
@@ -647,7 +670,8 @@ class Parser(QObject):
         
         self.CONSOLE_VERBOSITY = self.settings.value("ConsoleVerbosity", Globals.DEFAULT_CONSOLE_VERBOSITY, int)
         self.COMBAT_SESSION_TIMEOUT = self.settings.value("CombatSessionTimeout", Globals.DEFAULT_COMBAT_SESSION_TIMEOUT, int)
-        self.COMBAT_SESSION_NAME = self.settings.value("CombatSessionName", Globals.DEFAULT_COMBAT_SESSION_NAME, str)
+        self.COMBAT_SESSION_NAME = self.settings.value("UserSpecifiedNamePrefix", Globals.DEFAULT_COMBAT_SESSION_NAME, str)
+        self.COMBAT_SESSION_OPTION = self.settings.value("DefaultSessionNaming", Globals.DEFAULT_COMBAT_SESSION_OPTION, int)
 
     def on_sig_stop_monitoring(self):
         '''Stops monitoring the log file'''
