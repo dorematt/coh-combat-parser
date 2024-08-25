@@ -5,22 +5,23 @@ def apply_stylesheet(app):
     from PyQt5.QtCore import QFile, QIODevice, QTextStream
 
     # Load the stylesheet
-    stylesheet_path = os.path.join(Globals.ROOT_DIR, "ui", "style", "Combinear.qss")
-    stylesheet = QFile(stylesheet_path)
-    stylesheet.open(QIODevice.ReadOnly | QFile.Text)
-    stream = QTextStream(stylesheet)
-    app.setStyleSheet(stream.readAll())
+    if Globals.USE_GUI_THEME:
+        stylesheet_path = os.path.join(Globals.ROOT_DIR, "ui", "style", "Combinear.qss")
+        stylesheet = QFile(stylesheet_path)
+        stylesheet.open(QIODevice.ReadOnly | QFile.Text)
+        stream = QTextStream(stylesheet)
+        app.setStyleSheet(stream.readAll())
 
-    # Print font information for debugging
-    print("Current Font:", app.font().family(), app.font().pointSize())
-    
-    # Set the font globally for the application
+        # Print font information for debugging
+        print("Current Font:", app.font().family(), app.font().pointSize())
+        
+        # Set the font globally for the application
 
-    # Print font information after setting it for debugging
-    print("Updated Font:", app.font().family(), app.font().pointSize())
+        # Print font information after setting it for debugging
+        print("Updated Font:", app.font().family(), app.font().pointSize())
 
-    # Set the application icon
-    app.setWindowIcon(QIcon(os.path.join(Globals.ROOT_DIR, "ui", "icon", "icon_256.ico")))
+        # Set the application icon
+        app.setWindowIcon(QIcon(os.path.join(Globals.ROOT_DIR, "ui", "icon", "icon_256.ico")))
 
 def apply_header_style_fix(component):
     '''This is a workaround for a bug in Qt5 that causes the header to not be styled correctly.'''
