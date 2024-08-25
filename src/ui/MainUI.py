@@ -106,7 +106,7 @@ class MainUI(QMainWindow):
                 tree_widget.setSortingEnabled(True)
                 tree_widget.setHeaderLabels([
                     "Name", "DPS", "Acc %", "Avg Per Hit", "Count",
-                    "Max", "Min", "Total", "Hits", "Tries"
+                    "Max", "Min", "Total", "Hits", "Tries", "Proc %"
                 ])
                 apply_header_style_fix(tree_widget)
 
@@ -120,6 +120,7 @@ class MainUI(QMainWindow):
                 tree_widget.setColumnWidth(7, 100)
                 tree_widget.setColumnWidth(8, 75)
                 tree_widget.setColumnWidth(9, 75)
+                tree_widget.setColumnWidth(10, 75)
                 tree_widget.setMinimumWidth(500)
 
                 # Set the default sort column to DPS
@@ -349,7 +350,7 @@ class MainUI(QMainWindow):
 
             return character_item
 
-        def create_ability_item(parent_item:str, ability_name, duration):
+        def create_ability_item(character, parent_item:str, ability_name, duration):
             ability_item = QTreeWidgetItem(parent_item, [ability_name])
             ability_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+ability_name))
             ability_item.setData(1, Qt.DisplayRole, ability.get_dps(duration))
@@ -373,7 +374,7 @@ class MainUI(QMainWindow):
 
             return ability_item
 
-        def create_damage_item(parent_item, damage_name, duration):
+        def create_damage_item(ability, parent_item, damage_name, duration):
             damage_item = QTreeWidgetItem(parent_item, [damage_name.name])
             damage_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+damage_name.name))
             damage_item.setData(1, Qt.DisplayRole, damage_name.get_dps(duration))
@@ -382,6 +383,8 @@ class MainUI(QMainWindow):
             damage_item.setData(5, Qt.DisplayRole, damage_name.get_highest_damage())
             damage_item.setData(6, Qt.DisplayRole, damage_name.get_lowest_damage())
             damage_item.setData(7, Qt.DisplayRole, int(damage_name.get_damage()))
+            if damage_name.proc:
+                damage_item.setData(10, Qt.DisplayRole, damage_name.calc_proc_chance(ability.get_hits()))
             
 
             damage_item.setTextAlignment(2, Qt.AlignCenter)
@@ -416,10 +419,10 @@ class MainUI(QMainWindow):
                 character_item = create_character_item(tree_widget, character_name, duration)
 
                 for ability_name, ability in character.abilities.items():
-                    ability_item = create_ability_item(character_item, ability_name, duration)
+                    ability_item = create_ability_item(character, character_item, ability_name, duration)
 
                     for damage_name in ability.damage:
-                        create_damage_item(ability_item, damage_name, duration)
+                        create_damage_item(ability, ability_item, damage_name, duration)
 
             # Set initial tree expansion (player view only
             if tree_widget == self.ability_tree_display_player: tree_widget.expandToDepth(0)

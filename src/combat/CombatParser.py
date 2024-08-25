@@ -367,10 +367,10 @@ class Parser(QObject):
 
             if caster.last_ability is not None and self.associating_procs: # We'll check and process procs first
 
-                caster.last_ability.add_damage(DamageComponent(proc_name),damage)
+                caster.last_ability.add_damage(DamageComponent(proc_name, proc=True),damage)
                 
                 if target.last_ability is not None:
-                    target.last_ability.add_damage(DamageComponent(proc_name),damage)
+                    target.last_ability.add_damage(DamageComponent(proc_name, proc=True),damage)
                 return
             elif damage == 0: 
                 if self.CONSOLE_VERBOSITY >= 2: print(f"Ignoring zero-damage proc event: {data['ability']} on {data['target']}")
@@ -580,7 +580,7 @@ class Parser(QObject):
         if self.combat_session_live:
             self.end_current_session()
             self.print_session_results(self.combat_session_data[-1])
-            
+
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
         self.sig_finished.emit(self.combat_session_data)
         return True

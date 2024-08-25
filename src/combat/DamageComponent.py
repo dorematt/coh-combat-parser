@@ -2,9 +2,10 @@
 from PyQt5.QtCore import QObject
 class DamageComponent(QObject):
     '''Stores data about a damage component'''
-    def __init__(self, type="", value : float = 0):
+    def __init__(self, type="", value : float = 0, proc=False):
         super().__init__()
         self.count = 0
+        self.proc = proc
         self.type = type
         self.name = type
         self.total_damage = value
@@ -53,4 +54,9 @@ class DamageComponent(QObject):
         if value <= self.lowest_damage or self.lowest_damage == 0:
             self.lowest_damage = value
             #print ('         Lowest Damage Updated: ', self.highest_damage)
+    def calc_proc_chance(self, hits):
+        '''Calculates the number of time the proc activated based on the number of hits'''
+        if self.count == 0 or hits == 0: return 0
+        if self.proc: return round((self.count / hits) * 100, 2)
+        return 0
     
