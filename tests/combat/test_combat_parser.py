@@ -247,16 +247,21 @@ class TestSessionManagement:
         parser.COMBAT_SESSION_NAME = "Session"
         session = parser.new_session(1000)
 
-        assert "Session" in session.name
-        assert "1" in session.name
+        # First session has count=1, but get_name() only adds count if count > 1
+        # So first session just shows "Session", not "Session 1"
+        assert "Session" in session.get_name()
+        # Create a second session to test numbering
+        session2 = parser.new_session(2000)
+        assert "2" in session2.get_name()
 
     def test_new_session_user_name(self, parser):
         """Test new session with user-specified name."""
         parser.clean_variables()
         parser.user_session_name = "Boss Fight"
+        parser.session_name_override = True  # Must set override flag to use user name
         session = parser.new_session(1000)
 
-        assert "Boss Fight" in session.name
+        assert "Boss Fight" in session.get_name()
 
     def test_check_session_no_active(self, parser):
         """Test checking session when none active."""

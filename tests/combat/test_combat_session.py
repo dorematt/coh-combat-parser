@@ -41,8 +41,10 @@ class TestCombatSessionInitialization:
         assert session.end_time == 5000
         assert session.duration == 0
         assert session.name == "Session 1"
-        assert session.chars == {}
-        assert session.targets == {}
+        assert session.chars_out == {}
+        assert session.chars_in == {}
+        assert session.targets_in == {}
+        assert session.targets_out == {}
         assert session.exp_value == 0
         assert session.inf_value == 0
 
@@ -127,89 +129,89 @@ class TestCombatSessionCharacterManagement:
     def test_add_character(self, qapp):
         """Test adding a character to session."""
         session = CombatSession()
-        char = Character("Hero", "player")
-        session.add_character(char)
+        char = Character("Hero", "player_out")
+        session.add_character(char, "chars_out")
 
-        assert "Hero" in session.chars
-        assert session.chars["Hero"] == char
+        assert "Hero" in session.chars_out
+        assert session.chars_out["Hero"] == char
 
     def test_check_in_char_new_player(self, qapp):
         """Test checking in a new player character."""
         session = CombatSession()
-        result = session.check_in_char("Player1", "player")
+        result = session.check_in_char("Player1", "player_out")
 
         assert result is False  # New character
-        assert "Player1" in session.chars
-        assert session.chars["Player1"].get_type() == "player"
+        assert "Player1" in session.chars_out
+        assert session.chars_out["Player1"].get_type() == "player_out"
 
     def test_check_in_char_existing_player(self, qapp):
         """Test checking in an existing player character."""
         session = CombatSession()
-        session.check_in_char("Player1", "player")
-        result = session.check_in_char("Player1", "player")
+        session.check_in_char("Player1", "player_out")
+        result = session.check_in_char("Player1", "player_out")
 
         assert result is True  # Existing character
-        assert len(session.chars) == 1
+        assert len(session.chars_out) == 1
 
     def test_check_in_char_new_pet(self, qapp):
         """Test checking in a new pet character."""
         session = CombatSession()
-        result = session.check_in_char("Pet1", "pet")
+        result = session.check_in_char("Pet1", "pet_out")
 
         assert result is False  # New character
-        assert "Pet1" in session.chars
-        assert session.chars["Pet1"].get_type() == "pet"
+        assert "Pet1" in session.chars_out
+        assert session.chars_out["Pet1"].get_type() == "pet_out"
 
     def test_check_in_char_new_enemy(self, qapp):
         """Test checking in a new enemy character."""
         session = CombatSession()
-        result = session.check_in_char("Enemy1", "enemy")
+        result = session.check_in_char("Enemy1", "target_in")
 
         assert result is False  # New enemy
-        assert "Enemy1" in session.targets
-        assert session.targets["Enemy1"].get_type() == "enemy"
+        assert "Enemy1" in session.targets_in
+        assert session.targets_in["Enemy1"].get_type() == "target_in"
 
     def test_check_in_char_existing_enemy(self, qapp):
         """Test checking in an existing enemy character."""
         session = CombatSession()
-        session.check_in_char("Enemy1", "enemy")
-        result = session.check_in_char("Enemy1", "enemy")
+        session.check_in_char("Enemy1", "target_in")
+        result = session.check_in_char("Enemy1", "target_in")
 
         assert result is True  # Existing enemy
-        assert len(session.targets) == 1
+        assert len(session.targets_in) == 1
 
     def test_check_in_char_invalid_type(self, qapp):
-        """Test that invalid character type raises assertion."""
+        """Test that invalid character type raises ValueError."""
         session = CombatSession()
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             session.check_in_char("Invalid", "invalid_type")
 
     def test_multiple_characters(self, qapp):
         """Test adding multiple characters."""
         session = CombatSession()
 
-        session.check_in_char("Player1", "player")
-        session.check_in_char("Pet1", "pet")
-        session.check_in_char("Pet2", "pet")
+        session.check_in_char("Player1", "player_out")
+        session.check_in_char("Pet1", "pet_out")
+        session.check_in_char("Pet2", "pet_out")
 
-        assert len(session.chars) == 3
-        assert "Player1" in session.chars
-        assert "Pet1" in session.chars
-        assert "Pet2" in session.chars
+        assert len(session.chars_out) == 3
+        assert "Player1" in session.chars_out
+        assert "Pet1" in session.chars_out
+        assert "Pet2" in session.chars_out
 
     def test_multiple_targets(self, qapp):
         """Test adding multiple targets."""
         session = CombatSession()
 
-        session.check_in_char("Enemy1", "enemy")
-        session.check_in_char("Enemy2", "enemy")
-        session.check_in_char("Enemy3", "enemy")
+        session.check_in_char("Enemy1", "target_in")
+        session.check_in_char("Enemy2", "target_in")
+        session.check_in_char("Enemy3", "target_in")
 
-        assert len(session.targets) == 3
-        assert "Enemy1" in session.targets
-        assert "Enemy2" in session.targets
-        assert "Enemy3" in session.targets
+        assert len(session.targets_in) == 3
+        assert "Enemy1" in session.targets_in
+        assert "Enemy2" in session.targets_in
+        assert "Enemy3" in session.targets_in
 
 
 @pytest.mark.unit
@@ -224,31 +226,31 @@ class TestCombatSessionDamageCalculations:
     def test_get_total_damage_single_character(self, qapp):
         """Test total damage with single character."""
         session = CombatSession()
-        char = Character("Player", "player")
+        char = Character("Player", "player_out")
         ability = Ability("Power1")
         ability.add_damage(DamageComponent("Fire"), 100.0)
         char.add_ability("Power1", ability)
-        session.add_character(char)
+        session.add_character(char, "chars_out")
 
-        assert session.get_total_damage() == 100.0
+        assert session.get_total_damage("chars_out") == 100.0
 
     def test_get_total_damage_multiple_characters(self, qapp):
         """Test total damage with multiple characters."""
         session = CombatSession()
 
-        char1 = Character("Player", "player")
+        char1 = Character("Player", "player_out")
         ability1 = Ability("Power1")
         ability1.add_damage(DamageComponent("Fire"), 100.0)
         char1.add_ability("Power1", ability1)
-        session.add_character(char1)
+        session.add_character(char1, "chars_out")
 
-        char2 = Character("Pet", "pet")
+        char2 = Character("Pet", "pet_out")
         ability2 = Ability("Power2")
         ability2.add_damage(DamageComponent("Cold"), 50.0)
         char2.add_ability("Power2", ability2)
-        session.add_character(char2)
+        session.add_character(char2, "chars_out")
 
-        assert session.get_total_damage() == 150.0
+        assert session.get_total_damage("chars_out") == 150.0
 
     def test_has_no_damage_true(self, combat_session):
         """Test has_no_damage returns True when no damage."""
@@ -257,11 +259,11 @@ class TestCombatSessionDamageCalculations:
     def test_has_no_damage_false(self, qapp):
         """Test has_no_damage returns False when damage exists."""
         session = CombatSession()
-        char = Character("Player", "player")
+        char = Character("Player", "player_out")
         ability = Ability("Power1")
         ability.add_damage(DamageComponent("Fire"), 100.0)
         char.add_ability("Power1", ability)
-        session.add_character(char)
+        session.add_character(char, "chars_out")
 
         assert session.has_no_damage() is False
 
@@ -287,13 +289,13 @@ class TestCombatSessionDamageCalculations:
         session.set_end_time(10)
         session.update_duration()
 
-        char = Character("Player", "player")
+        char = Character("Player", "player_out")
         ability = Ability("Power1")
         ability.add_damage(DamageComponent("Fire"), 100.0)
         char.add_ability("Power1", ability)
-        session.add_character(char)
+        session.add_character(char, "chars_out")
 
-        dps = session.get_dps()
+        dps = session.get_dps("chars_out")
         assert dps == 10.0  # 100 damage / 10 seconds
 
 
@@ -381,23 +383,23 @@ class TestCombatSessionEdgeCases:
         session = CombatSession()
 
         for i in range(20):
-            char = Character(f"Char{i}", "player" if i % 2 == 0 else "pet")
+            char = Character(f"Char{i}", "player_out" if i % 2 == 0 else "pet_out")
             ability = Ability(f"Power{i}")
             ability.add_damage(DamageComponent("Fire"), 10.0)
             char.add_ability(f"Power{i}", ability)
-            session.add_character(char)
+            session.add_character(char, "chars_out")
 
-        assert len(session.chars) == 20
-        assert session.get_total_damage() == 200.0
+        assert len(session.chars_out) == 20
+        assert session.get_total_damage("chars_out") == 200.0
 
     def test_session_with_many_targets(self, qapp):
         """Test session with many targets."""
         session = CombatSession()
 
         for i in range(50):
-            session.check_in_char(f"Enemy{i}", "enemy")
+            session.check_in_char(f"Enemy{i}", "target_in")
 
-        assert len(session.targets) == 50
+        assert len(session.targets_in) == 50
 
     def test_multiple_session_time_updates(self, qapp):
         """Test multiple session time updates."""
@@ -416,11 +418,11 @@ class TestCombatSessionEdgeCases:
         """Test damage calculation precision."""
         session = CombatSession()
 
-        char = Character("Player", "player")
+        char = Character("Player", "player_out")
         ability = Ability("Precise")
         ability.add_damage(DamageComponent("Fire"), 10.123456)
         char.add_ability("Precise", ability)
-        session.add_character(char)
+        session.add_character(char, "chars_out")
 
-        total = session.get_total_damage()
+        total = session.get_total_damage("chars_out")
         assert total == 10.12  # Should be rounded to 2 decimal places

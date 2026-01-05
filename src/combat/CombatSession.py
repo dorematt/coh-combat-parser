@@ -148,8 +148,25 @@ class CombatSession(QObject):
                 target = name
         return target
     
-    def add_character(self, character):
-        self.chars[character.get_name()] = character
+    def add_character(self, character, type="chars_out"):
+        """Add a character to the appropriate dictionary based on type.
+
+        Args:
+            character: Character object to add
+            type: One of "chars_out", "chars_in", "targets_in", "targets_out"
+        """
+        assert type in ["chars_out", "chars_in", "targets_in", "targets_out"], "Type: '" + type + "' is not valid"
+
+        if type == "chars_out":
+            self.chars_out[character.get_name()] = character
+            self.chars_count += 1
+        elif type == "chars_in":
+            self.chars_in[character.get_name()] = character
+        elif type == "targets_in":
+            self.targets_in[character.get_name()] = character
+        elif type == "targets_out":
+            self.targets_out[character.get_name()] = character
+            self.targets_count += 1
     
     def check_in_char(self, name, type) -> bool:
         '''Checks and adds the character to the session if they are not already in it, Returns True if the character was already in the session'''

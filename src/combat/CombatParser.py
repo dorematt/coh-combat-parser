@@ -28,10 +28,10 @@ class Parser(QObject):
     parentThread = None
     final_update = False # Flag to indicate if a final update is required
     user_session_name = ""
-    settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
 
     def __init__(self, parent=None):
         super().__init__()
+        self.settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
         self.check_parse_settings()
         print('     Parser Initialize...')
         if self.CONSOLE_VERBOSITY>= 3: print("Creating interval_timer")
