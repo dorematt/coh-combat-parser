@@ -39,7 +39,7 @@ Any bugs drop into the Issues section or reach out to **@10kVolts** ingame or on
 Just in case you wanted to take a look around, the environment should be fairly straightforward to set up.
 
 #### Quick Start (Recommended)
-1. Make sure you have [Python](https://www.python.org/) (version 3.12 or later) installed
+1. Make sure you have [Python 3.12](https://www.python.org/) installed (PyQt5 and dependencies are not compatible with Python 3.13+)
 2. Clone the repo
 3. Run the launcher script:
    - **Linux/Mac**: `./run.sh`
@@ -48,6 +48,6 @@ Just in case you wanted to take a look around, the environment should be fairly 
 The script will automatically create a virtual environment, install dependencies, and launch the parser.
 
 #### Manual Setup
-1. Make sure you have [Python](https://www.python.org/) (version 3.12 or later) installed
+1. Make sure you have [Python 3.12](https://www.python.org/) installed (PyQt5 and dependencies are not compatible with Python 3.13+)
 2. Clone the repo and then create a _venv_ environemnt in the project directory and `pip install` the dependencies from requirements.txt
 3. Activate the venv and run `python src/CoH_Parser.py`
