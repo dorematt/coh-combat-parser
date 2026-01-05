@@ -1,7 +1,8 @@
 import re
 
-'''The following patterns are used to parse the combat log line data. The patterns are matched to a particular event occuring within that line '''
+
 PATTERNS = {
+    '''These are used to parse the combat log line data. The patterns are matched to a particular event occuring within that line and trigger the appropriate handling event.'''
     "player_ability_activate": re.compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You activated the (?P<ability>.+?) power\."
     ),
@@ -53,8 +54,8 @@ PATTERNS = {
     ),
 }
 
-'''This pattern was intended to be used to quickly grab the data and time from the line without having to loop through the whole list of patterns.  It is not currently used.'''
 PATTERN_DATETIME = {
+    '''This pattern was intended to be used to quickly grab the data and time from the line without having to loop through the whole list of patterns.  It is not currently used.'''
     "date_time": re.compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2})"
     )
