@@ -1,4 +1,3 @@
-
 from PyQt5.QtCore import QObject
 class DamageComponent(QObject):
     '''Stores data about a damage component'''
