@@ -36,6 +36,11 @@ class ParserThread(QThread):
         # Process all existing entries (sig_finished will be suppressed)
         self.parser.process_existing_log(file_path)
 
+        # Emit a final update to ensure UI is fully synchronized before starting live monitoring
+        from PyQt5.QtCore import QMutexLocker
+        with QMutexLocker(self.parser.combat_mutex):
+            self.parser.sig_periodic_update.emit(self.parser.combat_session_data)
+
         # Remove the suppression flag
         self.parser.suppress_finished_signal = False
 

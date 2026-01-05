@@ -131,6 +131,11 @@ class Parser(QObject):
         self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
         if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
         if self.monitoring_live: self.final_update = True
+
+        # Emit periodic update when processing existing logs (for UI updates during initial processing)
+        if self.processing_live and not self.monitoring_live:
+            with QMutexLocker(self.combat_mutex):
+                self.sig_periodic_update.emit(self.combat_session_data)
     
     def remove_last_session(self):
         '''Removes the current combat session, usually for instances where the session has no damage-related events'''
@@ -549,11 +554,13 @@ class Parser(QObject):
         #Open file and iterate through each line
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             refresher = 0 #just keeps the UI responsive
+            ui_update_counter = 0 # Counter for periodic UI updates
             self.processing_live = True
             for line in file:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 refresher += 1
+                ui_update_counter += 1
                 if event != "":
                     if self.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
@@ -561,6 +568,12 @@ class Parser(QObject):
                     refresher = 0
                     QCoreApplication.processEvents()
                     if not self.processing_live: break
+
+                # Emit periodic UI updates every 1000 lines for better responsiveness
+                if ui_update_counter > 1000:
+                    ui_update_counter = 0
+                    with QMutexLocker(self.combat_mutex):
+                        self.sig_periodic_update.emit(self.combat_session_data)
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
 
         # Only emit sig_finished if not suppressed (used when processing existing then starting live)
