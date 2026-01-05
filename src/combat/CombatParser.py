@@ -133,9 +133,9 @@ class Parser(QObject):
         if self.monitoring_live: self.final_update = True
 
         # Emit periodic update when processing existing logs (for UI updates during initial processing)
+        # Don't hold mutex while emitting signal to avoid blocking
         if self.processing_live and not self.monitoring_live:
-            with QMutexLocker(self.combat_mutex):
-                self.sig_periodic_update.emit(self.combat_session_data)
+            self.sig_periodic_update.emit(self.combat_session_data)
     
     def remove_last_session(self):
         '''Removes the current combat session, usually for instances where the session has no damage-related events'''
@@ -570,10 +570,10 @@ class Parser(QObject):
                     if not self.processing_live: break
 
                 # Emit periodic UI updates every 1000 lines for better responsiveness
+                # Don't hold mutex while emitting signal to avoid blocking
                 if ui_update_counter > 1000:
                     ui_update_counter = 0
-                    with QMutexLocker(self.combat_mutex):
-                        self.sig_periodic_update.emit(self.combat_session_data)
+                    self.sig_periodic_update.emit(self.combat_session_data)
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
 
         # Only emit sig_finished if not suppressed (used when processing existing then starting live)
