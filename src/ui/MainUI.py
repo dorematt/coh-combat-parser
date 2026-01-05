@@ -371,8 +371,8 @@ class MainUI(QMainWindow):
             ability_item.setData(2, Qt.DisplayRole, ability.get_accuracy())
             ability_item.setData(3, Qt.DisplayRole, ability.get_average_damage())
             ability_item.setData(4, Qt.DisplayRole, ability.get_count())
-            ability_item.setData(5, Qt.DisplayRole, ability.get_max_damage())
-            ability_item.setData(6, Qt.DisplayRole, ability.get_min_damage())
+            ability_item.setData(5, Qt.DisplayRole, round(ability.get_max_damage(), 2))
+            ability_item.setData(6, Qt.DisplayRole, round(ability.get_min_damage(), 2))
             ability_item.setData(7, Qt.DisplayRole, "{:,}".format(int(ability.get_total_damage())))
             ability_item.setData(8, Qt.DisplayRole, ability.get_hits())
             ability_item.setData(9, Qt.DisplayRole, ability.get_tries())
@@ -390,8 +390,8 @@ class MainUI(QMainWindow):
             damage_item.setData(1, Qt.DisplayRole, damage_name.get_dps(duration))
             damage_item.setData(3, Qt.DisplayRole, damage_name.get_average_damage())
             damage_item.setData(4, Qt.DisplayRole, damage_name.get_count())
-            damage_item.setData(5, Qt.DisplayRole, damage_name.get_highest_damage())
-            damage_item.setData(6, Qt.DisplayRole, damage_name.get_lowest_damage())
+            damage_item.setData(5, Qt.DisplayRole, round(damage_name.get_highest_damage(), 2))
+            damage_item.setData(6, Qt.DisplayRole, round(damage_name.get_lowest_damage(), 2))
             damage_item.setData(7, Qt.DisplayRole, "{:,}".format(int(damage_name.get_damage())))
 
         # asset mutex lock is in place

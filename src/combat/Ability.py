@@ -48,7 +48,7 @@ class Ability(QObject):
         for component in self.damage:
             sum += component.get_damage()
             #print('Damage Component for ', self.name,': ', component.type,'|', component.total_damage,'|', component.count)
-        return round(sum,2)
+        return sum  # Return raw value, rounding should only happen at display layer
     def get_max_damage(self):
         '''Returns the highest damage for the ability'''
         highest = 0

@@ -16,7 +16,7 @@ class DamageComponent(QObject):
         '''Adds damage value to the damage component'''
         self.count += 1
         self.total_damage += value
-        self.total_damage = round(self.total_damage, 2)
+        # Don't round here - keep full precision for internal calculations
         self.last_damage = value
         self.update_min_max_damage(value)
     

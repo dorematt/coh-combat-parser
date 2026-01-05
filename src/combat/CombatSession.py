@@ -47,7 +47,7 @@ class CombatSession(QObject):
         sum = 0
         for char in self.chars:
             sum += self.chars[char].get_total_damage()
-        return round(sum,2)
+        return sum  # Return raw value, rounding should only happen at display layer
     
     def get_average_damage(self):
         '''Calculates the average damage for the session'''
