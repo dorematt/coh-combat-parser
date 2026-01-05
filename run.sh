@@ -6,22 +6,36 @@
 set -e  # Exit on error
 
 VENV_DIR="venv"
-PYTHON_CMD="python3.12"
+PYTHON_CMD=""
 
 echo "================================================="
 echo "  CoH Combat Parser - Local Development Runner  "
 echo "================================================="
 echo ""
 
-# Check if Python 3.12 is installed
-if ! command -v $PYTHON_CMD &> /dev/null; then
-    # Fallback to python3 if python3.12 not found
+# Try to find Python 3.12 in order of preference
+echo "Searching for Python 3.12..."
+
+# 1. Try python3.12 command (most explicit)
+if command -v python3.12 &> /dev/null; then
+    PYTHON_CMD="python3.12"
+    echo "Found python3.12"
+# 2. Try python312 command
+elif command -v python312 &> /dev/null; then
+    PYTHON_CMD="python312"
+    echo "Found python312"
+# 3. Check if default python3 is version 3.12
+elif command -v python3 &> /dev/null; then
     PYTHON_CMD="python3"
-    if ! command -v $PYTHON_CMD &> /dev/null; then
-        echo "ERROR: Python 3 is not installed or not in PATH"
-        echo "Please install Python 3.12 from https://www.python.org/"
-        exit 1
-    fi
+    echo "Found python3"
+# 4. Check if python is version 3.12
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+    echo "Found python"
+else
+    echo "ERROR: Python is not installed or not in PATH"
+    echo "Please install Python 3.12 from https://www.python.org/"
+    exit 1
 fi
 
 # Display and check Python version
