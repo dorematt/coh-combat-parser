@@ -13,18 +13,36 @@ from pathlib import Path
 class ParserThread(QThread):
     sig_process_live_log = pyqtSignal(str)
     sig_process_existing_log = pyqtSignal(str)
-    def __init__(self, file_path : str,live: bool):
+    sig_process_existing_then_live = pyqtSignal(str)
+
+    def __init__(self, file_path : str, live: bool, process_existing_first: bool = False):
         super().__init__()
         self.settings = QSettings(Globals.AUTHOR, Globals.APPLICATION_NAME)
         self.file_path = file_path
         self.live = live
+        self.process_existing_first = process_existing_first
         self.parser = Parser(self)
         if self.settings.value("ConsoleVerbosity", 1, int) >= 2: print("Parser Initialized")
         self.sig_process_live_log.connect(lambda: self.parser.process_live_log(self.file_path))
         self.sig_process_existing_log.connect(lambda: self.parser.process_existing_log(self.file_path))
+        self.sig_process_existing_then_live.connect(lambda: self.process_existing_then_live_handler(self.file_path))
+
+    def process_existing_then_live_handler(self, file_path):
+        """Process existing log entries first, then start live monitoring."""
+        # Process all existing entries
+        self.parser.process_existing_log(file_path)
+        # Disconnect the finished signal temporarily to avoid double-triggering
+        self.parser.sig_finished.disconnect()
+        # Start live monitoring
+        self.parser.process_live_log(file_path)
+        # Reconnect the finished signal (though it won't be called for live monitoring)
+        self.parser.sig_finished.connect(lambda data: None)
 
     def run(self):
-        if self.live:
+        if self.live and self.process_existing_first:
+            self.sig_process_existing_then_live.emit(self.file_path)
+            print("Emitted Signal: Processing Existing Log, then Live Log")
+        elif self.live:
             self.sig_process_live_log.emit(self.file_path)
             ("Emitted Signal: Processing Live Log, with file path: ", self.file_path)
         else:
@@ -168,10 +186,10 @@ class MainUI(QMainWindow):
         print("Done.")
 
 
-    def start_worker_thread(self, file_path: str, live: bool):
-        
+    def start_worker_thread(self, file_path: str, live: bool, process_existing_first: bool = False):
+
         if self.CONSOLE_VERBOSITY >= 2: print("Starting Worker Thread...")
-        self.WorkerThread = ParserThread(file_path, live)
+        self.WorkerThread = ParserThread(file_path, live, process_existing_first)
         self.WorkerThread.parser.sig_finished.connect(self.on_worker_finished)
         self.WorkerThread.parser.sig_periodic_update.connect(lambda: self.on_sig_periodic_update(self.WorkerThread.parser.combat_session_data))
         self.sig_stop_monitoring.connect(self.WorkerThread.parser.on_sig_stop_monitoring)
@@ -191,7 +209,11 @@ class MainUI(QMainWindow):
             self.lock_ui()
             self.start_stop_button.setEnabled(True)
             self.monitoring_live = True
-            self.start_worker_thread(file_path, True)
+
+            # Check if we should process existing log before starting live monitoring
+            process_existing_first = self.settings.value("ProcessLogBeforeStarting", False, bool)
+
+            self.start_worker_thread(file_path, True, process_existing_first)
             self.ability_tree_display_player.clear()
             self.ability_tree_display_enemies.clear()
             self.combat_session_tree.clear()
@@ -299,8 +321,8 @@ class MainUI(QMainWindow):
 
 
     def repopulate(self, session):
-        '''This is the main function to clear and populate the ability tree with data from the provided combat session. This should only be called while under a mutex lock
-        TODO: Make this more efficient by only updating the changed data, rather than clearing and repopulating the entire treeWidget'''
+        '''This is the main function to update the ability tree with data from the provided combat session. This should only be called while under a mutex lock
+        Optimized to update existing items in-place rather than clearing and rebuilding the entire tree.'''
 
         def set_styling(item, font_size=10, is_bold=False, background_color=None):
             for i in range(10):
@@ -308,103 +330,74 @@ class MainUI(QMainWindow):
                 if background_color:
                     item.setBackground(i, background_color)
 
-        def save_ability_tree_state(tree_widget):
-            item_state = {}
-            iterator = QTreeWidgetItemIterator(tree_widget)
-            while iterator.value():
-                item = iterator.value()
-                id = item.data(0,Qt.UserRole)
-                item_state[id] = item.isExpanded()
-                iterator += 1
-            return item_state
+        def update_character_item(character_item, character_name, duration, is_new=False):
+            """Update or initialize a character item with current data."""
+            if is_new:
+                set_styling(character_item, font_size=11, is_bold=True, background_color=QColor(25, 25, 25))
+                character_item.setData(0, Qt.UserRole, character_name)
+                character_item.setText(0, character_name)
+                # Set text alignment on creation
+                for col in [2, 3, 4, 5, 6, 7, 8]:
+                    character_item.setTextAlignment(col, Qt.AlignCenter)
 
-        def restore_ability_tree_state(tree_widget, expanded_items):
-            iterator = QTreeWidgetItemIterator(tree_widget)
-            while iterator.value():
-                item = iterator.value()
-                id = item.data(0,Qt.UserRole)
-                if id in expanded_items:
-                    item.setExpanded(expanded_items[id])
-                iterator += 1
-                
-        def create_character_item(tree_widget, character_name, duration):
-            character_item = QTreeWidgetItem(tree_widget, [character_name])
-            set_styling(character_item, font_size=11, is_bold=True, background_color=QColor(25, 25, 25))
-            character_item.setData(0, Qt.UserRole, character_name)
+            # Update data (always)
             character_item.setData(1, Qt.DisplayRole, character.get_dps(duration))
             character_item.setData(2, Qt.DisplayRole, "{:,}%".format(character.get_accuracy()))
             character_item.setData(3, Qt.DisplayRole, character.get_average_damage())
             character_item.setData(4, Qt.DisplayRole, character.get_count())
-            character_item.setData(7, Qt.DisplayRole, int(character.get_total_damage()))
+            character_item.setData(7, Qt.DisplayRole, "{:,}".format(int(character.get_total_damage())))
             character_item.setData(8, Qt.DisplayRole, character.get_hits())
             character_item.setData(9, Qt.DisplayRole, character.get_tries())
 
-            character_item.setTextAlignment(2, Qt.AlignCenter)
-            character_item.setTextAlignment(3, Qt.AlignCenter)
-            character_item.setTextAlignment(4, Qt.AlignCenter)
-            character_item.setTextAlignment(5, Qt.AlignCenter)
-            character_item.setTextAlignment(6, Qt.AlignCenter)
-            character_item.setTextAlignment(7, Qt.AlignCenter)
-            character_item.setTextAlignment(8, Qt.AlignCenter)
+        def update_ability_item(ability_item, parent_item, ability_name, duration, is_new=False):
+            """Update or initialize an ability item with current data."""
+            if is_new:
+                ability_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+ability_name))
+                ability_item.setText(0, ability_name)
+                # Set text alignment on creation
+                for col in [2, 3, 4, 5, 6, 7, 8]:
+                    ability_item.setTextAlignment(col, Qt.AlignCenter)
 
-            return character_item
-
-        def create_ability_item(parent_item:str, ability_name, duration):
-            ability_item = QTreeWidgetItem(parent_item, [ability_name])
-            ability_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+ability_name))
+            # Update data (always)
             ability_item.setData(1, Qt.DisplayRole, ability.get_dps(duration))
-            # ability_item.setData(2, Qt.DisplayRole, "{:,}%".format(ability.get_accuracy()))
             ability_item.setData(2, Qt.DisplayRole, ability.get_accuracy())
             ability_item.setData(3, Qt.DisplayRole, ability.get_average_damage())
             ability_item.setData(4, Qt.DisplayRole, ability.get_count())
             ability_item.setData(5, Qt.DisplayRole, ability.get_max_damage())
             ability_item.setData(6, Qt.DisplayRole, ability.get_min_damage())
-            ability_item.setData(7, Qt.DisplayRole, int(ability.get_total_damage()))
+            ability_item.setData(7, Qt.DisplayRole, "{:,}".format(int(ability.get_total_damage())))
             ability_item.setData(8, Qt.DisplayRole, ability.get_hits())
             ability_item.setData(9, Qt.DisplayRole, ability.get_tries())
 
-            ability_item.setTextAlignment(2, Qt.AlignCenter)
-            ability_item.setTextAlignment(3, Qt.AlignCenter)
-            ability_item.setTextAlignment(4, Qt.AlignCenter)
-            ability_item.setTextAlignment(5, Qt.AlignCenter)
-            ability_item.setTextAlignment(6, Qt.AlignCenter)
-            ability_item.setTextAlignment(7, Qt.AlignCenter)
-            ability_item.setTextAlignment(8, Qt.AlignCenter)
+        def update_damage_item(damage_item, parent_item, damage_name, duration, is_new=False):
+            """Update or initialize a damage item with current data."""
+            if is_new:
+                damage_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+damage_name.name))
+                damage_item.setText(0, damage_name.name)
+                # Set text alignment on creation
+                for col in [2, 3, 4, 5, 6, 7]:
+                    damage_item.setTextAlignment(col, Qt.AlignCenter)
 
-            return ability_item
-
-        def create_damage_item(parent_item, damage_name, duration):
-            damage_item = QTreeWidgetItem(parent_item, [damage_name.name])
-            damage_item.setData(0, Qt.UserRole, str(parent_item.data(0,Qt.UserRole)+damage_name.name))
+            # Update data (always)
             damage_item.setData(1, Qt.DisplayRole, damage_name.get_dps(duration))
             damage_item.setData(3, Qt.DisplayRole, damage_name.get_average_damage())
             damage_item.setData(4, Qt.DisplayRole, damage_name.get_count())
             damage_item.setData(5, Qt.DisplayRole, damage_name.get_highest_damage())
             damage_item.setData(6, Qt.DisplayRole, damage_name.get_lowest_damage())
-            damage_item.setData(7, Qt.DisplayRole, int(damage_name.get_damage()))
-            
-
-            damage_item.setTextAlignment(2, Qt.AlignCenter)
-            damage_item.setTextAlignment(3, Qt.AlignCenter)
-            damage_item.setTextAlignment(4, Qt.AlignCenter)
-            damage_item.setTextAlignment(5, Qt.AlignCenter)
-            damage_item.setTextAlignment(6, Qt.AlignCenter)
-            damage_item.setTextAlignment(7, Qt.AlignCenter)
-
-            return damage_item
+            damage_item.setData(7, Qt.DisplayRole, "{:,}".format(int(damage_name.get_damage())))
 
         # asset mutex lock is in place
         assert not(self.combat_mutex.tryLock()), "UI Repopulation mutex not acquired"
+
+        # If no session data, clear trees and return
+        if session is None or session == []:
+            self.ability_tree_display_player.clear()
+            self.ability_tree_display_enemies.clear()
+            return
+
         for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies]:
-
-            tree_state = save_ability_tree_state(tree_widget)
-            current_column = tree_widget.header().sortIndicatorSection()
-            current_order = tree_widget.header().sortIndicatorOrder()
-            tree_widget.clear()
-
-            # Repopulate the treeWidget
-            if session is None or session == []:
-                return
+            # Block signals during update to prevent flickering
+            tree_widget.blockSignals(True)
 
             if tree_widget == self.ability_tree_display_player:
                 char_list = session.chars
@@ -412,23 +405,98 @@ class MainUI(QMainWindow):
                 char_list = session.targets
 
             duration = session.duration
+            visited_items = set()
+
+            # Update or create character items
             for character_name, character in char_list.items():
-                character_item = create_character_item(tree_widget, character_name, duration)
+                # Find or create character item
+                char_id = character_name
+                character_item = None
 
+                # Search for existing character item
+                for i in range(tree_widget.topLevelItemCount()):
+                    item = tree_widget.topLevelItem(i)
+                    if item.data(0, Qt.UserRole) == char_id:
+                        character_item = item
+                        break
+
+                # Create new character item if not found
+                is_new_char = character_item is None
+                if is_new_char:
+                    character_item = QTreeWidgetItem(tree_widget, [character_name])
+                    # Set default expansion for player tree
+                    if tree_widget == self.ability_tree_display_player:
+                        character_item.setExpanded(True)
+
+                update_character_item(character_item, character_name, duration, is_new_char)
+                visited_items.add(char_id)
+
+                # Track visited ability items for this character
+                ability_ids_in_data = set()
+
+                # Update or create ability items
                 for ability_name, ability in character.abilities.items():
-                    ability_item = create_ability_item(character_item, ability_name, duration)
+                    ability_id = str(char_id + ability_name)
+                    ability_ids_in_data.add(ability_id)
+                    ability_item = None
 
+                    # Search for existing ability item
+                    for i in range(character_item.childCount()):
+                        child = character_item.child(i)
+                        if child.data(0, Qt.UserRole) == ability_id:
+                            ability_item = child
+                            break
+
+                    # Create new ability item if not found
+                    is_new_ability = ability_item is None
+                    if is_new_ability:
+                        ability_item = QTreeWidgetItem(character_item, [ability_name])
+
+                    update_ability_item(ability_item, character_item, ability_name, duration, is_new_ability)
+
+                    # Track visited damage items for this ability
+                    damage_ids_in_data = set()
+
+                    # Update or create damage items
                     for damage_name in ability.damage:
-                        create_damage_item(ability_item, damage_name, duration)
+                        damage_id = str(ability_id + damage_name.name)
+                        damage_ids_in_data.add(damage_id)
+                        damage_item = None
 
-            # Set initial tree expansion (player view only
-            if tree_widget == self.ability_tree_display_player: tree_widget.expandToDepth(0)
+                        # Search for existing damage item
+                        for i in range(ability_item.childCount()):
+                            child = ability_item.child(i)
+                            if child.data(0, Qt.UserRole) == damage_id:
+                                damage_item = child
+                                break
 
-            # Restore user tree state
-            restore_ability_tree_state(tree_widget, tree_state)
-            
-            # Restore user sorting
-            tree_widget.sortByColumn(current_column, current_order)
+                        # Create new damage item if not found
+                        is_new_damage = damage_item is None
+                        if is_new_damage:
+                            damage_item = QTreeWidgetItem(ability_item, [damage_name.name])
+
+                        update_damage_item(damage_item, ability_item, damage_name, duration, is_new_damage)
+
+                    # Remove damage items that no longer exist
+                    for i in range(ability_item.childCount() - 1, -1, -1):
+                        child = ability_item.child(i)
+                        if child.data(0, Qt.UserRole) not in damage_ids_in_data:
+                            ability_item.removeChild(child)
+
+                # Remove ability items that no longer exist
+                for i in range(character_item.childCount() - 1, -1, -1):
+                    child = character_item.child(i)
+                    if child.data(0, Qt.UserRole) not in ability_ids_in_data:
+                        character_item.removeChild(child)
+
+            # Remove character items that no longer exist
+            for i in range(tree_widget.topLevelItemCount() - 1, -1, -1):
+                item = tree_widget.topLevelItem(i)
+                if item.data(0, Qt.UserRole) not in visited_items:
+                    tree_widget.takeTopLevelItem(i)
+
+            # Unblock signals
+            tree_widget.blockSignals(False)
             
 
 

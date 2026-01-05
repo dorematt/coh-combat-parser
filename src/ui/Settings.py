@@ -65,12 +65,28 @@ class SettingsWindow(QDialog):
         auto_update_checkbox = QCheckBox()
         auto_update_checkbox.setToolTip(tooltip)
         auto_update_checkbox.setChecked(self.settings.value("AutoUpdateLogFile", Globals.DEFAULT_AUTO_UPDATE_LOG_FILE, bool))
-  
+        auto_update_checkbox.stateChanged.connect(self.save_auto_update_log_file)
+
         auto_update_layout = QHBoxLayout()
         auto_update_layout.addWidget(auto_update_label)
         auto_update_layout.addWidget(auto_update_checkbox)
         layout.addLayout(auto_update_layout)
-        
+
+        # Process log before starting
+        tooltip = "Process all existing log entries before monitoring for new activity when 'Start Log' is clicked"
+        process_before_start_label = QLabel("Process Log before Starting:")
+        process_before_start_label.setToolTip(tooltip)
+
+        process_before_start_checkbox = QCheckBox()
+        process_before_start_checkbox.setToolTip(tooltip)
+        process_before_start_checkbox.setChecked(self.settings.value("ProcessLogBeforeStarting", False, bool))
+        process_before_start_checkbox.stateChanged.connect(self.save_process_log_before_starting)
+
+        process_before_start_layout = QHBoxLayout()
+        process_before_start_layout.addWidget(process_before_start_label)
+        process_before_start_layout.addWidget(process_before_start_checkbox)
+        layout.addLayout(process_before_start_layout)
+
         # Console Verbosity
         tooltip = "The amount of information to display in the console - For Debug purposes only, this WILL impact performance"
         verbosity_label = QLabel("Console Verbosity:")
@@ -119,7 +135,10 @@ class SettingsWindow(QDialog):
 
     def save_auto_update_log_file(self, value):
         self.settings.setValue("AutoUpdateLogFile", value)
-        
+
+    def save_process_log_before_starting(self, value):
+        self.settings.setValue("ProcessLogBeforeStarting", value)
+
     def save_settings(self):
         self.settings.sync()
         self.close()
