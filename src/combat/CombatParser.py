@@ -290,9 +290,12 @@ class Parser(QObject):
             # Ability activation for the pet
             char_ability = char.abilities[this_ability]
             if char.get_type() == "pet": char_ability.ability_used() # We don't have power activation events for pets, so we'll use the hit roll as a proxy for ability usage
-            char_ability.ability_hit(data["outcome"] == "HIT") 
+            char_ability.ability_hit(data["outcome"] == "HIT")
 
-        
+        # Update the caster's last_ability to ensure procs are associated correctly
+        # This is especially important for non-damaging abilities (debuffs, buffs, etc.)
+        caster.last_ability = caster.abilities[this_ability]
+
 
 
     def handle_event_player_damage(self, data, pet=False):
