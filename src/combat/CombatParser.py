@@ -562,7 +562,10 @@ class Parser(QObject):
                     QCoreApplication.processEvents()
                     if not self.processing_live: break
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
-        self.sig_finished.emit(self.combat_session_data)
+
+        # Only emit sig_finished if not suppressed (used when processing existing then starting live)
+        if not getattr(self, 'suppress_finished_signal', False):
+            self.sig_finished.emit(self.combat_session_data)
         return True
     
     @pyqtSlot()

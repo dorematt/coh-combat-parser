@@ -22,6 +22,7 @@ class ParserThread(QThread):
         self.live = live
         self.process_existing_first = process_existing_first
         self.parser = Parser(self)
+        self.stored_finished_callback = None  # Store the finished callback for reconnection
         if self.settings.value("ConsoleVerbosity", 1, int) >= 2: print("Parser Initialized")
         self.sig_process_live_log.connect(lambda: self.parser.process_live_log(self.file_path))
         self.sig_process_existing_log.connect(lambda: self.parser.process_existing_log(self.file_path))
@@ -29,14 +30,17 @@ class ParserThread(QThread):
 
     def process_existing_then_live_handler(self, file_path):
         """Process existing log entries first, then start live monitoring."""
-        # Process all existing entries
+        # Set a flag to suppress sig_finished emission during existing log processing
+        self.parser.suppress_finished_signal = True
+
+        # Process all existing entries (sig_finished will be suppressed)
         self.parser.process_existing_log(file_path)
-        # Disconnect the finished signal temporarily to avoid double-triggering
-        self.parser.sig_finished.disconnect()
+
+        # Remove the suppression flag
+        self.parser.suppress_finished_signal = False
+
         # Start live monitoring
         self.parser.process_live_log(file_path)
-        # Reconnect the finished signal (though it won't be called for live monitoring)
-        self.parser.sig_finished.connect(lambda data: None)
 
     def run(self):
         if self.live and self.process_existing_first:
