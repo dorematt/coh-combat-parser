@@ -4,3 +4,8 @@ __experimental__/
 build/
 dist/
 *.spec
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
