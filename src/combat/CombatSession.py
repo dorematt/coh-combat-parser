@@ -14,8 +14,10 @@ class CombatSession(QObject):
         self.start_time = timestamp
         self.end_time = timestamp
         self.duration = 0 # Seconds
-        self.chars = {} # Stores player and any pets involved in the session
-        self.targets = {} # Stores a list of targets hit in the sesison
+        self.chars_out = {} # Stores player and any pets'  outgoing damage/healing in the session'
+        self.chars_in = {}  # Stores player and any pets' incoming damage/healing in the session'
+        self.targets_in = {} # Stores a list of targets' incoming damage from the session
+        self.targets_out = {} # Stores a list of enemies hitting the player in the session
         self.chars_count = 0
         self.targets_count = 0
         self.exp_value = 0
@@ -70,20 +72,33 @@ class CombatSession(QObject):
         self.update_duration()
         return self.duration
     
-    def get_total_damage(self):
+    def get_total_damage(self,type="chars_out"):
         '''Calculates the total damage for the session'''
         sum = 0
-        for char in self.chars:
-            sum += self.chars[char].get_total_damage()
+        assert type in ["chars_out", "chars_in", "targets_in", "targets_out"], "Type: '" + type + "' is not valid"
+        if type == "chars_out":
+            for char in self.chars_out:
+                sum += self.chars_out[char].get_total_damage()
+        elif type == "chars_in":
+            for char in self.chars_in:
+                sum += self.chars_in[char].get_total_damage()
+        elif type == "targets_in":
+            for target in self.targets_in:
+                sum += self.targets_in[target].get_total_damage()
+        elif type == "targets_out":
+            for target in self.targets_out:
+                sum += self.targets_out[target].get_total_damage()  
         return round(sum,2)
     
     def get_count_chars(self):
         '''Returns the number of characters in the session'''
         return self.chars_count
     
+    
     def get_count_targets(self):
         '''Returns the number of targets in the session'''
-        return self.targets
+        return self.targets_count()
+    
     
     def get_average_damage(self):
         '''Calculates the average damage for the session'''
@@ -91,11 +106,23 @@ class CombatSession(QObject):
         if damage > 0 : damage =  round(damage / self.get_count(),2)
         return damage
     
-    def get_dps(self):
+    def get_dps(self,type="chars_out"):
         '''Calculates the DPS for the session based off of the damage components'''
         dps = 0
-        for char in self.chars:
-            dps += self.chars[char].get_dps(self.duration)
+        assert type in ["chars_out", "chars_in", "targets_in", "targets_out"], "Type: '" + type + "' is not valid"
+        
+        if type == "chars_out":
+            for char in self.chars_out:
+                dps += self.chars_out[char].get_dps(self.duration)
+        elif type == "chars_in":
+            for char in self.chars_in:
+                dps += self.chars_in[char].get_dps(self.duration)     
+        elif type == "targets_in":
+            for target in self.targets_in:
+                dps += self.targets_in[target].get_dps(self.duration)
+        elif type == "targets_out":
+            for target in self.targets_out:
+                dps += self.targets_out[target].get_dps(self.duration)
         return round(dps,2)
     
     def add_exp(self, exp_value):
@@ -112,12 +139,12 @@ class CombatSession(QObject):
         return self.inf_value
     
     def get_highest_damage_target(self):
-        '''Returns the target that took the most damage in the session'''
+        '''Returns the target that took the most damage in the session (for generic naming purposes)'''
         highest = 0
         target = ""
-        for name in self.targets:
-            if self.targets[name].get_total_damage() > highest:
-                highest = self.targets[name].get_total_damage()
+        for name in self.targets_in:
+            if self.targets_in[name].get_total_damage() > highest:
+                highest = self.targets_in[name].get_total_damage()
                 target = name
         return target
     
@@ -127,23 +154,36 @@ class CombatSession(QObject):
     def check_in_char(self, name, type) -> bool:
         '''Checks and adds the character to the session if they are not already in it, Returns True if the character was already in the session'''
 
-        assert type in ["player", "pet", "enemy"], "Character Type: '" + type + "' is not valid"
+        #assert type in ["player_in", "player_out" "pet_in", "pet_out" "enemy", "target"], "Character Type: '" + type + "' is not valid"
 
-        if type == "enemy":
-            if name not in self.targets:
-                self.targets[name] = Character(name, type)
+        if type == "target_out":
+            if name not in self.targets_out:
+                self.targets_out[name] = Character(name, type)
                 self.targets_count += 1
                 if self.name_type == 3 and self.targets_count == 1 and not self.name_override: # If we're using first enemy hit as the session name, update the session name
                     self.name = name
                     return False
                 return False
             return True
-        else:
-            if name not in self.chars:
-                self.chars[name] = Character(name, type)
+        elif  type == "target_in":
+            if name not in self.targets_in:
+                self.targets_in[name] = Character(name, type)
+                return False
+            return True
+        elif type == "player_in" or type == "pet_in":
+            if name not in self.chars_in:
+                self.chars_in[name] = Character(name, type)
+                return False
+            return True
+        elif type == "player_out" or type == "pet_out":
+            if name not in self.chars_out:
+                self.chars_out[name] = Character(name, type)
                 self.chars_count += 1
                 return False
             return True
+        else:
+            raise ValueError("Character Type: '" + type + "' is not valid") 
+
         
     def end_session(self, timestamp=0):
         '''Ends the session and updates the session time one last time if provided'''

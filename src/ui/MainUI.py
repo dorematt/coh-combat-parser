@@ -97,12 +97,14 @@ class MainUI(QMainWindow):
             # Set up view tabs for the ability tree
             self.view_tabs = QTabWidget()
 
-            # Create two separate ability tree displays for player and enemies
+            # Create separate ability tree displays for player and enemies
             self.ability_tree_display_player = QTreeWidget()
             self.ability_tree_display_enemies = QTreeWidget()
+            self.ability_tree_display_player_in = QTreeWidget()
+            self.ability_tree_display_enemy_out = QTreeWidget()
 
             # Configure the columns for both trees (assuming they have the same structure)
-            for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies]:
+            for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies, self.ability_tree_display_player_in, self.ability_tree_display_enemy_out]:
                 tree_widget.setSortingEnabled(True)
                 tree_widget.setHeaderLabels([
                     "Name", "DPS", "Acc %", "Avg Per Hit", "Count",
@@ -127,8 +129,10 @@ class MainUI(QMainWindow):
                 tree_widget.sortByColumn(1, Qt.DescendingOrder)
 
             # Add ability trees to the view tabs
-            self.view_tabs.addTab(self.ability_tree_display_player, "Player")
-            self.view_tabs.addTab(self.ability_tree_display_enemies, "Enemies")
+            self.view_tabs.addTab(self.ability_tree_display_player, "Player Damage")
+            self.view_tabs.addTab(self.ability_tree_display_enemies, "Player Damage By Enemy")
+            self.view_tabs.addTab(self.ability_tree_display_player_in, "Damage Received")
+            self.view_tabs.addTab(self.ability_tree_display_enemy_out, "Damaged Received By Enemy")
 
         def setup_layout():
             # Set up the layout
@@ -195,6 +199,9 @@ class MainUI(QMainWindow):
             self.start_worker_thread(file_path, True)
             self.ability_tree_display_player.clear()
             self.ability_tree_display_enemies.clear()
+            self.ability_tree_display_enemy_out.clear()
+            self.ability_tree_display_player_in.clear()
+
             self.combat_session_tree.clear()
 
         else:
@@ -398,7 +405,7 @@ class MainUI(QMainWindow):
 
         # asset mutex lock is in place
         assert not(self.combat_mutex.tryLock()), "UI Repopulation mutex not acquired"
-        for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies]:
+        for tree_widget in [self.ability_tree_display_player, self.ability_tree_display_enemies, self.ability_tree_display_player_in, self.ability_tree_display_enemy_out]:
 
             tree_state = save_ability_tree_state(tree_widget)
             current_column = tree_widget.header().sortIndicatorSection()
@@ -410,9 +417,13 @@ class MainUI(QMainWindow):
                 return
 
             if tree_widget == self.ability_tree_display_player:
-                char_list = session.chars
-            else:
-                char_list = session.targets
+                char_list = session.chars_out
+            elif tree_widget == self.ability_tree_display_enemies:
+                char_list = session.targets_in
+            elif tree_widget == self.ability_tree_display_player_in:
+                char_list = session.chars_in
+            elif tree_widget == self.ability_tree_display_enemy_out:
+                char_list = session.targets_out
 
             duration = session.duration
             for character_name, character in char_list.items():

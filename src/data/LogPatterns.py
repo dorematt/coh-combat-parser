@@ -17,12 +17,48 @@ PATTERNS = {
     "player_pet_damage": re.compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * You hit (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
     ),
-    # "foe_hit_roll": re.compile(
-    #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
-    # ),
-    # "foe_damage": re.compile(
-    #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) hits you with their (?P<ability>.+?) for (?P<damage_value>[\d.]+) points of (?P<damage_type>\w+) damage\.*"
-    # ),
+    "foe_pet_hit_roll": re.compile(
+        r"(?P<date>\d{4}-\d{2}-\d{2})\s"
+        r"(?P<time>\d{2}:\d{2}:\d{2})\s"
+        r"(?P<pet_name>.+?):\s+"
+        r"(?P<enemy>.+?)\s"
+        r"(?:HITS|MISSES)!?\s"
+        r"(?:their\s)?"
+        r"(?P<ability>.+?)\s"
+        r"power had a\s"
+        r"(?P<chance>\d{1,3}(?:\.\d{2})?)%\s"
+        r"chance to hit(?:, but| and) rolled a\s"
+        r"(?P<roll>\d{1,3}\.\d{2})\."
+    ),
+    "foe_hit_roll": re.compile(
+        r"(?P<date>\d{4}-\d{2}-\d{2})\s"
+        r"(?P<time>\d{2}:\d{2}:\d{2})\s"
+        r"(?P<enemy>.+?)\s"
+        r"(?:HITS|MISSES)!?\s"
+        r"(?:you!\s)?"
+        r"(?:their\s)?"
+        r"(?P<ability>.+?)\s"
+        r"power had a\s"
+        r"(?P<chance>\d{1,3}(?:\.\d{2})?)%\s"
+        r"chance to hit(?:, but| and) rolled a\s"
+        r"(?P<roll>\d{1,3}\.\d{2})\."
+    ),
+    "foe_autohit": re.compile(
+        r"(?P<date>\d{4}-\d{2}-\d{2})\s"
+        r"(?P<time>\d{2}:\d{2}:\d{2})\s"
+        r"(?P<enemy>.+?)\s"
+        # Specifically match 'HITS you!' for these events.
+        r"HITS\syou!\s"
+        r"(?:their\s)?"
+        r"(?P<ability>.+?)\s"
+        r"power was autohit\."
+    ),
+    "foe_damage": re.compile(
+         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) hits you with their (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
+    ),
+    "foe_damage_pet": re.compile(
+         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?P<enemy>.+?) hits you with their (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
+    ),
     "reward_gain_both": re.compile(
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You gain (?P<exp_value>\d{1,3}(,\d{3})*(\.\d+)?) experience and (?P<inf_value>\d{1,3}(,\d{3})*(\.\d+)?) (?:influence|information|infamy)\.*"
     ),
@@ -35,7 +71,7 @@ PATTERNS = {
     #"reward_gain_item": re.compile(
     #    r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) You recieve (?P<item_name>\d+(,\d{3})*|\d+) (?:influence|information|infamy)\."
     #),
-    # "healing": re.compile(
+    # "player_healing_recieved": re.compile(
     #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<healer>.+?) (?:heals|heal) (?:you|PLAYER_NAME) with their (?P<ability>.+?) for (?P<healing_value>[\d.]+) health points(?: over time)?\.*"
     # ),
     # This pattern should capture endurance recovery. An example line for endurance recovery is needed to refine this pattern.

@@ -5,7 +5,7 @@ class Character(QObject):
     def __init__(self, name="", type="") -> None:
         super().__init__()
         self.name = name
-        self.type = type #player, pet, enemy
+        self.type = type #player, pet, enemy, target
         self.abilities = {}
         self.is_pet = False
         self.last_ability = None # For the purposes of associating proc to powers

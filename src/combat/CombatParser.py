@@ -84,6 +84,7 @@ class Parser(QObject):
         for key, regex in PATTERNS.items():
             match = regex.match(log_line)
             if match:
+                print(f"Extracted {key} from log line: {log_line.strip()}") if self.CONSOLE_VERBOSITY >= 3 else None
                 return (key, match.groupdict())
         return '',[]
     def extract_datetime_from_line(self, log_line):
@@ -210,9 +211,18 @@ class Parser(QObject):
                 trigger_session_update(False)
                 self.handle_event_player_hit_roll(data, event == "player_pet_hit_roll")
 
+            elif event == "foe_hit_roll" or  event == "foe_autohit" or  event == "foe_pet_hit_roll":
+                if event =="foe_pet_hit_roll": print("event triggered: ", event)
+                trigger_session_update(False)
+                self.handle_event_foe_hit_roll(data, pet=(event == "foe_pet_hit_roll"), autohit=(event == "foe_autohit"))
+
             elif event == "player_damage" or event == "player_pet_damage":
                 trigger_session_update(True)
                 self.handle_event_player_damage(data, event == "player_pet_damage")
+
+            elif event == "foe_damage" or event == "foe_damage_pet":
+                trigger_session_update(True)
+                self.handle_event_foe_damage(data, event == "foe_damage_pet")
 
             elif event == "reward_gain_both" or event == "reward_gain_exp" or event == "reward_gain_inf":
                 if data.get("exp_value") is None:
@@ -242,11 +252,11 @@ class Parser(QObject):
         player = self.PLAYER_NAME
         this_session = self.combat_session_data[-1]
         
-        check_player = this_session.check_in_char(player, "player")
+        check_player = this_session.check_in_char(player, "player_out")
         if not check_player:
-            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", this_session.chars[player].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
+            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", this_session.chars_out[player].get_name(), " to Session: ", self.session_count, ' via Power Activation Event')
         
-        player = this_session.chars[player]
+        player = this_session.chars_out[player]
         
         if this_ability not in player.abilities: 
             player.abilities[this_ability] = Ability(this_ability)
@@ -255,15 +265,12 @@ class Parser(QObject):
         this_ability = player.abilities[this_ability]
         this_ability.ability_used()
         player.last_ability = this_ability # Setting the active ability here to cover non-damaging abilities with procs attached to them
-
     
     def handle_event_player_hit_roll(self, data, pet=False):
         '''Handles a player hit roll event, assumes it came from player instead of pet unless pet=True'''
 
         # Ignore events where the player hits themselves
         if data["target"] == self.PLAYER_NAME:
-            if self.CONSOLE_VERBOSITY >= 2: 
-                print(f'Player hit themselves with {data["ability"]}. Ignoring')
             return
 
         # Determine the ability and caster based on pet status
@@ -278,12 +285,11 @@ class Parser(QObject):
         else:
             caster = self.PLAYER_NAME
 
-       
-
+    
         # Check and update the session's char and target lists
         this_session = self.combat_session_data[-1]
-        check_caster = this_session.check_in_char(caster, "pet" if pet else "player")
-        check_target = this_session.check_in_char(target, "enemy")
+        check_caster = this_session.check_in_char(caster, "pet_out" if pet else "player_out")
+        check_target = this_session.check_in_char(target, "target_in")
 
         if not(check_caster):
             if self.CONSOLE_VERBOSITY >= 2:
@@ -293,22 +299,63 @@ class Parser(QObject):
             if self.CONSOLE_VERBOSITY >= 2:
                 print(f"     Added Target: {target} to Session: {self.session_count} via Hit Roll Event")
 
-        caster = this_session.chars[caster]
-        target = this_session.targets[target]
+        caster = this_session.chars_out[caster]
+        target = this_session.targets_in[target]
+        outcome= data["outcome"] == "HIT"
 
+        self.add_hit_outcome_to_ability(caster, target, this_ability, outcome)
+
+    def add_hit_outcome_to_ability(self, caster, target, ability, hit):
         # Add the ability information to each character's ability list
         for char in [caster, target]:
-            if this_ability not in char.abilities:
-                char.abilities[this_ability] = Ability(this_ability)
+            if ability not in char.abilities:
+                char.abilities[ability] = Ability(ability)
                 if self.CONSOLE_VERBOSITY >= 3:
-                    print(f"     Added Ability: {this_ability} to Character: {char.get_name()} via Hit Roll Event")
+                    print(f"     Added Ability: {ability} to Character: {char.get_name()} via Hit Roll Event")
 
             # Ability activation for the pet
-            char_ability = char.abilities[this_ability]
+            char_ability = char.abilities[ability]
             if char.get_type() == "pet": char_ability.ability_used() # We don't have power activation events for pets, so we'll use the hit roll as a proxy for ability usage
-            char_ability.ability_hit(data["outcome"] == "HIT") 
+            char_ability.ability_hit(hit) 
 
+    def handle_event_foe_hit_roll(self, data, pet=False, autohit=False):
+        '''Handles a foe hit roll event, assumes it came from an enemy instead of a pet'''
+
+        # print("     Handling Foe Hit Roll Event: ", data)
         
+        # Ignore events caused by player auto-hitting themselves
+        if data["enemy"] == self.PLAYER_NAME:
+            return
+        
+        if autohit:
+            calculated_outcome = True
+        else:
+            calculated_outcome = True if float(data['roll']) <= float(data['chance']) else False
+
+        # Determine the ability and caster based on pet status
+        if pet:
+            target =  data["pet_name"]
+        else: 
+            target = self.PLAYER_NAME
+        
+        this_ability = data["ability"]
+        caster = data["enemy"]
+
+        # Check and update the session's char and target lists
+        this_session = self.combat_session_data[-1]
+        check_caster = this_session.check_in_char(caster, "target_out")
+        check_target = this_session.check_in_char(target, "player_in")
+        if not(check_caster):
+            if self.CONSOLE_VERBOSITY >= 2:
+                print(f"     Added Enemy: {caster} to Session: {self.session_count} via Foe Hit Roll Event")
+        if not(check_target):  
+            if self.CONSOLE_VERBOSITY >= 2:
+                print(f"     Added Character: {target} to Session: {self.session_count} via Foe Hit Roll Event")  
+        
+        caster = this_session.targets_out[caster]
+        target = this_session.chars_in[target]
+
+        self.add_hit_outcome_to_ability(caster, target, this_ability, calculated_outcome)
 
 
     def handle_event_player_damage(self, data, pet=False):
@@ -347,23 +394,73 @@ class Parser(QObject):
 
 
         # Check caster and target into the session
-        check_caster = this_session.check_in_char(caster, "pet" if pet else "player")
-        check_target = this_session.check_in_char(target, "enemy")
+        check_caster = this_session.check_in_char(caster, "pet_out" if pet else "player_out")
+        check_target = this_session.check_in_char(target, "target_in")
 
         if not check_caster:
-            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", this_session.chars[caster].get_name(), " to Session: ", self.session_count, ' via Damage Event')
+            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Character: ", this_session.chars_out[caster].get_name(), " to Session: ", self.session_count, ' via Damage Event')
 
         if not check_target:
-            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Target: ", this_session.targets[target].get_name(), " to Session: ", self.session_count, ' via Damage Event')
+            if self.CONSOLE_VERBOSITY >= 3: print("     Added New Target: ", this_session.targets_in[target].get_name(), " to Session: ", self.session_count, ' via Damage Event')
 
-        caster = this_session.chars[caster]
-        target = this_session.targets[target]
+
+        caster = this_session.chars_out[caster]
+        target = this_session.targets_in[target]
+
+        self.add_damage_to_ability(caster, target, this_ability, damage, type, proc, flair)
+
+    def handle_event_foe_damage(self, data, pet=False):
+        '''Handles a foe damage event found by the interpret_event function. This function will also handle damage from procs and either handle them as separate or associate them with the last used ability depending on the settings.'''
+        # print ("     Handling Foe Damage Event: ", data)
+        # Ignore events where the enemy hits themselves
+        if data["enemy"] == self.PLAYER_NAME:
+            if self.CONSOLE_VERBOSITY >= 2:
+                print("     Ignoring enemy damage event where the target is the player: ", data["enemy"])
+            return
+    
+        enemy = data["enemy"]
+        ability = data["ability"]
+        flair = data["ability_desc"]
+        damage = float(data["damage_value"])
+
+        #Determine the target based on pet status
+        if pet:
+            target = data["pet_name"]
+        else:
+            target = self.PLAYER_NAME
+
+        this_session = self.combat_session_data[-1]
+        if flair != "":
+            type = (data["damage_type"] + " (" + data["ability_desc"] + ")")
+        else:
+            type = data["damage_type"]
+
+        proc = False # Flag to indicate if this is a proc damage event
         
+        this_session = self.combat_session_data[-1]
+        check_caster = this_session.check_in_char(enemy, "target_out")
+        check_target = this_session.check_in_char(target, "player_in")
+        if not(check_caster):
+            if self.CONSOLE_VERBOSITY >= 2:
+                print(f"     Added Enemy: {enemy} to Session: {self.session_count} via Foe Hit Roll Event")
+        if not(check_target):  
+            if self.CONSOLE_VERBOSITY >= 2:
+                print(f"     Added Character: {target} to Session: {self.session_count} via Foe Hit Roll Event")  
+        
+      
+        registered_enemy = this_session.targets_out[enemy]
+        registered_char = this_session.chars_in[target]
+
+        self.add_damage_to_ability(registered_enemy, registered_char, ability, damage, type, proc, flair)
+  
+    def add_damage_to_ability(self, caster=Character, target=Character, ability="", damage=0, type="", proc=False, flair=""):
+
+
         if proc:
             if flair != "": 
-                proc_name = (data["ability"] + " (" + data["damage_flair"] + ")")
+                proc_name = (ability + " (" + flair + ")")
             else:
-                proc_name = data["ability"] 
+                proc_name = ability 
 
             if caster.last_ability is not None and self.associating_procs: # We'll check and process procs first
 
@@ -373,7 +470,7 @@ class Parser(QObject):
                     target.last_ability.add_damage(DamageComponent(proc_name, proc=True),damage)
                 return
             elif damage == 0: 
-                if self.CONSOLE_VERBOSITY >= 2: print(f"Ignoring zero-damage proc event: {data['ability']} on {data['target']}")
+                if self.CONSOLE_VERBOSITY >= 2: print(f"Ignoring zero-damage proc event: {ability.name} on {target.name}")
                 return 
             
         
@@ -382,7 +479,7 @@ class Parser(QObject):
 
         # Find ability in char list and add damage component, both for caster and the target
         for char in [caster, target]:
-            char_ability = this_ability
+            char_ability = ability
             
             if char_ability not in char.abilities:
                 char.abilities[char_ability] = Ability(char_ability)
@@ -390,7 +487,7 @@ class Parser(QObject):
                     print(f"     Added Ability: {char_ability} to Character: {char.get_name()} via Damage Event")
 
             char_ability = char.get_ability(char_ability)
-            caster_ability = caster.get_ability(this_ability)
+            caster_ability = caster.get_ability(ability)
 
 
             char_ability.add_damage(DamageComponent(type), damage)
@@ -420,8 +517,6 @@ class Parser(QObject):
             char.last_ability = char_ability
             if current_char == caster: current_char = target # Switch to the target for the second loop
 
-
-  
     def handle_event_reward_gain(self, data):
         '''Handles a reward gain event, found by the interpret_event function'''
         
