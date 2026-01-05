@@ -14,7 +14,9 @@ from data.LogPatterns import PATTERNS, PATTERN_DATETIME
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
 class Parser(QObject):
-    '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
+    '''
+    This class handles parsing the combat log file, either live or from an existing file. It will iterate through a given log file, setting up combat sessions and organizing data as it goes.
+    '''
 
     LOG_FILE_PATH = ""
     log_file = None
@@ -25,6 +27,7 @@ class Parser(QObject):
     combat_mutex = QMutex()
     sig_finished = pyqtSignal(list)
     sig_periodic_update = pyqtSignal(list)
+    sig_error = pyqtSignal(str, str)  # Signal for errors (message, title)
     parentThread = None
     final_update = False # Flag to indicate if a final update is required
     user_session_name = ""
@@ -472,14 +475,31 @@ class Parser(QObject):
         self.global_combat_duration += duration
         return self.global_combat_duration
     def get_log_duration(self):
-        '''Calculates the duration of the log file'''
+        '''Calculates the duration of the log file across all combat sessions
+        
+        :param self: Parser instance
+        :return: Duration of the log file in seconds'''
+        for session in self.combat_session_data:
+            self.global_combat_duration += session.get_duration()
+
         return self.GLOBAL_CURRENT_TIME - self.GOBAL_START_TIME
-    def get_dps(self, duration):
-        '''Calculates the DPS for the player'''
+    def get_log_dps(self):
+        '''
+        Get the total DPS across all combat sessions in the log file.
+        
+        :param self: Parser instance
+        :return: Total DPS as a float
+        :rtype: float
+        '''
         total_damage = 0
-        for ability in self.abilities:
-            total_damage += self.abilities[ability].get_total_damage()
-        return round(total_damage / duration, 2)
+        duration = 0
+        for session in self.combat_session_data:
+            total_damage += session.get_total_damage()
+            duration += session.get_duration()
+        if duration == 0 or total_damage == 0:
+            return 0
+        else:
+            return total_damage / duration
     
     def add_exp(self, exp_value):
         '''Adds the exp value to the total exp'''
@@ -519,7 +539,7 @@ class Parser(QObject):
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             for line in list(file):
                 event, data = self.extract_from_line(line)
-                if event == "player_name" or event == "player_name_backup":
+                if (event == "player_name" or event == "player_name_backup") and isinstance(data, dict):
                     print ('          Player Name Located: ', data["player_name"])
                     return data["player_name"]
 
@@ -605,9 +625,28 @@ class Parser(QObject):
         self.log_file.seek(0, 2)
         
     def monitoring_loop(self):
+        '''
+        Reads new lines from the log file and processes them in real-time. This then calls the interpret_event function to handle the extracted data.
 
-        file = self.log_file
-        line = file.readline()
+        :param self: Description
+        '''
+        try:
+            file = self.log_file
+            if file is None:
+                raise Exception("Cannot read from log file.")
+            line = file.readline()
+        except Exception as e:
+            # Stop the monitoring timer to prevent repeated error attempts
+            self.monitoring_timer.stop()
+            self.monitoring_live = False
+
+            # Emit error signal for UI to display
+            error_message = f"Cannot read from log file: {str(e)}"
+            self.sig_error.emit(error_message, "Log File Error")
+
+            if self.CONSOLE_VERBOSITY >= 1:
+                print(f"ERROR     {error_message}")
+            return
         if not line: return
         event, data = self.extract_from_line(line)
         self.line_count += 1

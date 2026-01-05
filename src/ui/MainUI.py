@@ -200,6 +200,7 @@ class MainUI(QMainWindow):
         self.WorkerThread = ParserThread(file_path, live, process_existing_first)
         self.WorkerThread.parser.sig_finished.connect(self.on_worker_finished)
         self.WorkerThread.parser.sig_periodic_update.connect(lambda: self.on_sig_periodic_update(self.WorkerThread.parser.combat_session_data))
+        self.WorkerThread.parser.sig_error.connect(self.on_parser_error)
         self.sig_stop_monitoring.connect(self.WorkerThread.parser.on_sig_stop_monitoring)
         self.WorkerThread.start()
         self.settings.setValue("last_file_path", file_path)
@@ -277,7 +278,7 @@ class MainUI(QMainWindow):
     def on_sig_periodic_update(self, data):
         '''Signal to update the UI with the latest data from the parser thread'''
         with QMutexLocker(self.combat_mutex):
-            
+
             self.combat_session_data = data
             if data == [] or self.combat_session_data is None:
                 self.selected_session = []
@@ -288,7 +289,18 @@ class MainUI(QMainWindow):
             self.repopulate_sessions(self.combat_session_data)
             self.repopulate(self.selected_session)
             self
-        
+
+    @pyqtSlot(str, str)
+    def on_parser_error(self, message: str, title: str):
+        '''Handles error signals from the parser and displays error dialog to user'''
+        # Update monitoring state
+        self.monitoring_live = False
+        if hasattr(self, 'live_button'):
+            self.live_button.setText("Start Live Monitoring")
+
+        # Display error dialog
+        self.error(message, title)
+
     def on_session_selection_change(self):
         '''Handles the event when a combat session is selected in the treeWidget'''
         if self.combat_session_tree.selectedItems():
