@@ -1,0 +1,1 @@
+# Combat tests package initialization
