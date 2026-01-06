@@ -85,7 +85,9 @@ class Parser(QObject):
     
     def extract_from_line(self, log_line):
         '''Extracts data from a log line using regex patterns, returns a string for the log entry type and a dict of the extracted data.'''
-        for key, regex in PATTERNS.items():
+        # Use self.PATTERNS if it exists (updated with player name), otherwise fall back to module PATTERNS
+        patterns = getattr(self, 'PATTERNS', PATTERNS)
+        for key, regex in patterns.items():
             match = regex.match(log_line)
             if match:
                 return (key, match.groupdict())

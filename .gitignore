@@ -4,3 +4,4 @@ __experimental__/
 build/
 dist/
 *.spec
+.claude/settings.local.json
