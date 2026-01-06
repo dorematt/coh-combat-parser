@@ -400,6 +400,14 @@ class MainUI(QMainWindow):
 
             # Update data (always)
             damage_item.setData(1, Qt.DisplayRole, damage_name.get_dps(duration))
+
+            # For proc damage components, display proc rate in curly brackets
+            if damage_name.is_proc:
+                proc_rate = damage_name.get_proc_rate()
+                damage_item.setData(2, Qt.DisplayRole, "{" + str(proc_rate) + "}")
+            else:
+                damage_item.setData(2, Qt.DisplayRole, "")
+
             damage_item.setData(3, Qt.DisplayRole, damage_name.get_average_damage())
             damage_item.setData(4, Qt.DisplayRole, damage_name.get_count())
             damage_item.setData(5, Qt.DisplayRole, round(damage_name.get_highest_damage(), 2))

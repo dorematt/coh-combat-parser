@@ -87,8 +87,8 @@ class Ability(QObject):
         '''Calculates the accuracy for the ability'''
         if self.hits == 0 or self.tries == 0:
             return 0
-        return round((self.hits / self.tries) * 100,2)
-    
+        return round((self.hits / self.tries) * 100, 2)
+
     def get_count(self):
         '''Returns the number of times the ability has been used'''
         return self.count

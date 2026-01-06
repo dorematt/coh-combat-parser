@@ -403,6 +403,14 @@ class Parser(QObject):
             if char.get_type() == "pet": char_ability.ability_used() # We don't have power activation events for pets, so we'll use the hit roll as a proxy for ability usage
             char_ability.ability_hit(data["outcome"] == "HIT")
 
+        # When associating procs and ability hits successfully, increment parent_hits for all proc damage components
+        # Only do this for the caster's ability, not the target's (to avoid double-counting)
+        if self.associating_procs and data["outcome"] == "HIT":
+            caster_ability = caster.abilities[this_ability]
+            for damage_component in caster_ability.damage:
+                if damage_component.is_proc:
+                    damage_component.increment_parent_hits()
+
         # Update the caster's last_ability to ensure procs are associated correctly
         # This is especially important for non-damaging abilities (debuffs, buffs, etc.)
         caster.last_ability = caster.abilities[this_ability]
@@ -477,21 +485,46 @@ class Parser(QObject):
 
         caster = this_session.chars[caster]
         target = this_session.targets[target]
-        
+
         if proc:
-            if flair != "": 
+            if flair != "":
                 proc_name = (data["ability"] + " (" + data["damage_flair"] + ")")
             else:
-                proc_name = data["ability"] 
+                proc_name = data["ability"]
 
             if caster.last_ability is not None and self.associating_procs: # We'll check and process procs first
+                # Check if this proc damage component already exists
+                existing_proc = None
+                for component in caster.last_ability.damage:
+                    if component.type == proc_name:
+                        existing_proc = component
+                        break
 
-                caster.last_ability.add_damage(DamageComponent(proc_name),damage)
-                
+                if existing_proc is None:
+                    # First time this proc fires - create new component and initialize parent_hits
+                    proc_component = DamageComponent(proc_name, is_proc=True)
+                    proc_component.parent_hits = caster.last_ability.get_hits()
+                    caster.last_ability.add_damage(proc_component, damage)
+                else:
+                    # Proc already exists - just add damage
+                    caster.last_ability.add_damage(DamageComponent(proc_name, is_proc=True), damage)
+
                 if target.last_ability is not None:
-                    target.last_ability.add_damage(DamageComponent(proc_name),damage)
+                    # Check if this proc damage component already exists for target
+                    existing_target_proc = None
+                    for component in target.last_ability.damage:
+                        if component.type == proc_name:
+                            existing_target_proc = component
+                            break
+
+                    if existing_target_proc is None:
+                        target_proc_component = DamageComponent(proc_name, is_proc=True)
+                        target_proc_component.parent_hits = target.last_ability.get_hits()
+                        target.last_ability.add_damage(target_proc_component, damage)
+                    else:
+                        target.last_ability.add_damage(DamageComponent(proc_name, is_proc=True), damage)
                 return
-            elif damage == 0: 
+            elif damage == 0:
                 if self.CONSOLE_VERBOSITY >= 2: print(f"Ignoring zero-damage proc event: {data['ability']} on {data['target']}")
                 return 
             
@@ -502,13 +535,14 @@ class Parser(QObject):
         # Find ability in char list and add damage component, both for caster and the target
         for char in [caster, target]:
             char_ability = this_ability
-            
+
             if char_ability not in char.abilities:
-                char.abilities[char_ability] = Ability(char_ability)
+                char.abilities[char_ability] = Ability(char_ability, proc=proc)
                 if self.CONSOLE_VERBOSITY >= 2:
                     print(f"     Added Ability: {char_ability} to Character: {char.get_name()} via Damage Event")
 
             char_ability = char.get_ability(char_ability)
+
             caster_ability = caster.get_ability(this_ability)
 
 
