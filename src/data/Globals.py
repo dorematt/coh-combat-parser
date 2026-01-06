@@ -1,8 +1,8 @@
 class Globals:
     import os
-    VERSION = "0.1.1"
-    BUILD_DATE = "11 Aug 2024"
-    BUILD_TYPE = "ALPHA"
+    VERSION = "0.2.0"
+    BUILD_DATE = "6 Jan 2026"
+    BUILD_TYPE = "BETA"
     AUTHOR = "@10kVolts"
     APPLICATION_NAME = "coh-combat-parser"
     CONTRIBUTORS = []
@@ -15,5 +15,3 @@ class Globals:
     DEFAULT_ASSOCIATE_PROCS_TO_POWERS = True
     DEFAULT_CONSOLE_VERBOSITY = 1
     DEFAULT_AUTO_UPDATE_LOG_FILE = True
-
-    NO_HIT_ABILITIES = ["Interface", "Shifting Tides"]

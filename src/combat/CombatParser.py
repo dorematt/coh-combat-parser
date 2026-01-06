@@ -10,6 +10,7 @@ from combat.CombatSession import CombatSession
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QCoreApplication, QSettings
 from data.Globals import Globals
 from data.pseudopets import is_pseudopet
+from data.no_hit_abilities import is_no_hit_ability
 from data.LogPatterns import PATTERNS, PATTERN_DATETIME
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
@@ -191,7 +192,11 @@ class Parser(QObject):
         return self.combat_session_data[-1]
     
     def check_session(self, timestamp):
-        '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
+        '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration
+        
+        :param timestamp: Current timestamp to check against
+        :return: 1 = Session active and valid, 0 = No active session, -1 = Session timed out
+        '''
 
         if self.combat_session_live:
             # print('     Checking Session: ', self.session_count, ' With a duration of ', self.session[-1].get_duration(), ' seconds')
@@ -207,7 +212,7 @@ class Parser(QObject):
         return 0 # No active session
     
     def end_current_session(self):
-        '''Ends the current combat session'''
+        '''Ends the current combat session, finalizes session naming if necessary, calls one last live_monitoring update'''
         session = self.combat_session_data[-1]
         session.update_duration()
 
@@ -511,7 +516,7 @@ class Parser(QObject):
 
             # Some DoT auras don't have hit rolls recorded in the log when they hit, so we'll put those abilities in a list to treat damage events as successful hits as well
             if not proc and caster_ability.get_hits() == 0:
-                    if any(word in char_ability.get_name() for word in Globals.NO_HIT_ABILITIES): 
+                    if is_no_hit_ability(char_ability.get_name()):
                         self.no_hitroll_ability_list[char_ability] = False # This ability is auto-hit and should not be included in hit-roll stats
                     else:
                         self.no_hitroll_ability_list[char_ability] = True # This ability is dependent on a hit-roll and should be included in hit-roll stats

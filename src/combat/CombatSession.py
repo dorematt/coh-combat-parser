@@ -43,6 +43,10 @@ class CombatSession(QObject):
         self.update_duration()
         return self.duration
     
+    def get_count(self):
+        '''Returns the number of characters in the session'''
+        return len(self.chars)
+    
     def get_total_damage(self):
         '''Calculates the total damage for the session'''
         sum = 0

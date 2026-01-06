@@ -1,3 +1,7 @@
+"""
+Pseudopets in City of Heroes are powers that summon entities that act like pets but are technically not classified as pets in the game's mechanics.
+When a power is matched to a pseudopet, all damage and effects will be rolled into an ability of the same name from the character.
+"""
 PSEUDOPETS = ["Caltrops", "Lightning Rod", "Whirlwind", "Omega Maneuver", "Poison Trap", "Poison Gas", "Detonator", "Trip Mine", "Triage Beacon", "Oil Slick", " Oil Slick Arrow", "Rain of Fire", "Tar Patch",
               "Burn", "Water Spout", "Sleet", "Freezing Rain", "Faraday Cage", "Enflame", "Incandescence", 
               
