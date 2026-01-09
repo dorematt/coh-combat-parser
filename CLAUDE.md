@@ -4,7 +4,7 @@
 
 This is a Python-based combat log parser for City of Heroes, a popular MMORPG. The application reads and parses combat chat logs to provide real-time and historical combat statistics including damage output, DPS calculations, hit accuracy, and per-ability breakdowns.
 
-**Current Status**: ALPHA - Expect bugs and possible data inaccuracies
+**Current Status**: BETA - Feature-complete but may contain bugs
 
 **Author**: @10kVolts
 **Repository**: https://github.com/dorematt/coh-combat-parser/
@@ -31,6 +31,7 @@ coh-combat-parser/
 │   ├── data/                  # Data models and patterns
 │   │   ├── Globals.py         # Global constants and settings
 │   │   ├── LogPatterns.py     # Regex patterns for log parsing
+│   │   ├── no_hit_abilities.py # Auto-hit abilities list
 │   │   └── pseudopets.py      # Pseudopet definitions
 │   └── ui/                    # User interface
 │       ├── MainUI.py          # Main application window
@@ -85,12 +86,13 @@ python src/CoH_Parser.py
 - **CombatSession.py**: Manages combat sessions (starts on ability activation, ends after 15s of inactivity)
 - **Ability.py**: Tracks individual ability statistics (damage, activation count, accuracy)
 - **Character.py**: Represents players and their combat data
-- **DamageComponent.py**: Handles damage calculation and categorization
+- **DamageComponent.py**: Handles damage calculation, categorization, and proc rate tracking
 
 ### Data Layer
 
 - **Globals.py**: Application-wide constants including version, build info, and default settings
 - **LogPatterns.py**: Regular expression patterns for parsing City of Heroes combat log format
+- **no_hit_abilities.py**: List of abilities that don't have hit roll events in logs (auto-hit powers, Interface procs)
 - **pseudopets.py**: Definitions for pseudo-pets (temporary entities that deal damage on behalf of the player)
 
 ### UI Layer
@@ -101,11 +103,13 @@ python src/CoH_Parser.py
 
 ## Important Constants (Globals.py)
 
-- `VERSION`: Current version number
-- `BUILD_TYPE`: "ALPHA", "BETA", or "RELEASE"
+- `VERSION`: Current version number (currently 0.2.0)
+- `BUILD_TYPE`: "ALPHA", "BETA", or "RELEASE" (currently BETA)
+- `BUILD_DATE`: Last build date
 - `DEFAULT_COMBAT_SESSION_TIMEOUT`: 15 seconds (time after last damage before session ends)
+- `DEFAULT_COMBAT_SESSION_NAMING_MODE`: Session naming mode - "First Enemy Damaged", "Highest Enemy Damaged", or "Custom Name"
 - `DEFAULT_ASSOCIATE_PROCS_TO_POWERS`: Associates proc damage with triggering abilities
-- `NO_HIT_ABILITIES`: Abilities that don't track hit/miss (like Interface procs)
+- `NO_HIT_ABILITIES`: Moved to `no_hit_abilities.py` module - abilities that don't track hit/miss
 
 ## Features
 
@@ -116,15 +120,22 @@ python src/CoH_Parser.py
 - DPS calculation (overall and per-session)
 - Per-ability statistics (damage, activations, average damage, accuracy)
 - Damage type and flair tracking (Crits, procs, etc.)
+- Proc rate tracking for damage components
 - Automatic combat session splitting
-- Custom session naming (type `##SESSION_NAME Session` in local chat)
+- Multiple session naming modes:
+  - First Enemy Damaged (auto-names based on first enemy hit)
+  - Highest Enemy Damaged (auto-names based on enemy with most damage)
+  - Custom Name (manual naming via chat command `##SESSION_NAME Session`)
 
 ### Session Management
 
 - Sessions auto-start when an ability is activated
 - Sessions end 15 seconds after the last damage event
 - Duration measured from first to last damaging ability
-- Users can rename sessions via in-game chat commands
+- Three session naming modes available (configurable in Settings):
+  - **First Enemy Damaged**: Automatically names session after the first enemy hit
+  - **Highest Enemy Damaged**: Automatically names session after the enemy who took the most damage
+  - **Custom Name**: Manual control via in-game chat command (`##SESSION_NAME Session`)
 
 ## Development Guidelines
 
@@ -191,7 +202,7 @@ Edit stylesheets in `src/ui/style/`:
 
 ## Known Issues & Limitations
 
-- ALPHA software - expect bugs and inaccuracies
+- BETA software - feature-complete but may contain bugs
 - Requires Python 3.12 (not compatible with 3.13+)
 - Relies on City of Heroes chat logging being enabled
 - Only tracks outgoing damage (not incoming)
