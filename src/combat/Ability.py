@@ -1,4 +1,4 @@
-from  PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject
 
 class Ability(QObject):
     '''Stores data about an ability used'''
@@ -33,9 +33,19 @@ class Ability(QObject):
             self.ability_used() 
     
     def ability_used(self):
-        '''Handles incrementing the count for each time ability is used. Can also be called during a hit check to increment the hit counter'''
+        '''
+        This is called upon every time an ability is used to track the number of times used. This should be incremented regardless of hit or miss.
+
+        :param self: Ability object
+        '''
         self.count += 1
     def ability_hit(self, hit):
+        """"
+        This is called when an ability successfully hits an enemy to track the number of hits.
+        
+        :param self: Ability object
+        :param hit: int
+        """
         self.tries += 1
         if hit: self.hits += 1
     def get_name(self):
@@ -44,11 +54,11 @@ class Ability(QObject):
     
     def get_total_damage(self):
         '''Calculates the total damage for the ability'''
-        sum = 0
+        damage_sum = 0
         for component in self.damage:
-            sum += component.get_damage()
+            damage_sum += component.get_damage()
             #print('Damage Component for ', self.name,': ', component.type,'|', component.total_damage,'|', component.count)
-        return round(sum,2)
+        return damage_sum  # Return raw value, rounding should only happen at display layer
     def get_max_damage(self):
         '''Returns the highest damage for the ability'''
         highest = 0
@@ -77,8 +87,8 @@ class Ability(QObject):
         '''Calculates the accuracy for the ability'''
         if self.hits == 0 or self.tries == 0:
             return 0
-        return round((self.hits / self.tries) * 100,2)
-    
+        return round((self.hits / self.tries) * 100, 2)
+
     def get_count(self):
         '''Returns the number of times the ability has been used'''
         return self.count

@@ -1,8 +1,7 @@
-
 from PyQt5.QtCore import QObject
 class DamageComponent(QObject):
     '''Stores data about a damage component'''
-    def __init__(self, type="", value : float = 0):
+    def __init__(self, type="", value : float = 0, is_proc=False):
         super().__init__()
         self.count = 0
         self.type = type
@@ -11,12 +10,14 @@ class DamageComponent(QObject):
         self.highest_damage = 0
         self.lowest_damage = 0
         self.last_damage = 0
+        self.is_proc = is_proc  # True if this damage component is from a proc
+        self.parent_hits = 0  # Track parent ability hits for proc rate calculation
     
     def add_damage(self, type, value : float):
         '''Adds damage value to the damage component'''
         self.count += 1
         self.total_damage += value
-        self.total_damage = round(self.total_damage, 2)
+        # Don't round here - keep full precision for internal calculations
         self.last_damage = value
         self.update_min_max_damage(value)
     
@@ -53,4 +54,14 @@ class DamageComponent(QObject):
         if value <= self.lowest_damage or self.lowest_damage == 0:
             self.lowest_damage = value
             #print ('         Lowest Damage Updated: ', self.highest_damage)
+
+    def increment_parent_hits(self):
+        '''Increments the parent ability hit count (used for proc rate calculation)'''
+        self.parent_hits += 1
+
+    def get_proc_rate(self):
+        '''Returns the proc rate as a percentage (proc activations / parent hits * 100)'''
+        if not self.is_proc or self.parent_hits == 0:
+            return 0
+        return round((self.count / self.parent_hits) * 100, 0)
     

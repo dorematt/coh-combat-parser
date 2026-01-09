@@ -30,7 +30,7 @@ class Character(QObject):
         if self.abilities == {}: return sum
         for ability in self.abilities:
             sum += self.abilities[ability].get_total_damage()
-        return round(sum,2)
+        return sum  # Return raw value, rounding should only happen at display layer
     
     def get_average_damage(self):
         '''Calculates the overall average damage per hit for the character by looping through all abilities' average damage and returning the sum'''

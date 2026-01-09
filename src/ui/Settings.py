@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QSpinBox, QLineEdit, QVBoxLayout, QWidget, QPushButton, QCheckBox, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QSpinBox, QLineEdit, QVBoxLayout, QWidget, QPushButton, QCheckBox, QHBoxLayout, QComboBox
 from PyQt5.QtCore import QSettings
 from PyQt5.QtGui import QIcon
 from data.Globals import Globals
@@ -31,24 +31,46 @@ class SettingsWindow(QDialog):
         timeout_spinbox.valueChanged.connect(self.save_combat_session_timeout)
         layout.addWidget(timeout_spinbox)
 
-        # Combat Session Name
+        # Combat Session Naming Mode (moved above custom name)
+        tooltip = "Choose how combat sessions are named:\n" \
+                  "• First Enemy Damaged - Use the name of the first enemy damaged\n" \
+                  "• Highest Enemy Damaged - Use the name of the enemy that took the most damage\n" \
+                  "• Custom Name - Use the custom name specified below\n" \
+                  "Note: In-game chat commands can override this setting by typing: /SET_NAME <name>"
+        naming_mode_label = QLabel("Session Naming Mode:")
+        naming_mode_label.setToolTip(tooltip)
+        layout.addWidget(naming_mode_label)
+
+        self.naming_mode_combo = QComboBox()
+        self.naming_mode_combo.setToolTip(tooltip)
+        self.naming_mode_combo.addItems(["First Enemy Damaged", "Highest Enemy Damaged", "Custom Name"])
+        current_mode = self.settings.value("CombatSessionNamingMode", Globals.DEFAULT_COMBAT_SESSION_NAMING_MODE, str)
+        self.naming_mode_combo.setCurrentText(current_mode)
+        self.naming_mode_combo.currentTextChanged.connect(self.on_naming_mode_changed)
+        layout.addWidget(self.naming_mode_combo)
+
+        # Custom Session Name 
         tooltip = "This is the default name for a combat session.  It can be overridden by in-game chat commands"
-        name_label = QLabel("Default Session Name:")
+        name_label = QLabel("Custom Session Name:")
         name_label.setToolTip(tooltip)
         layout.addWidget(name_label)
 
-        name_lineedit = QLineEdit()
-        name_lineedit.setToolTip(tooltip)
-        name_lineedit.setText(self.settings.value("CombatSessionName", Globals.DEFAULT_COMBAT_SESSION_NAME, str))
-        name_lineedit.textChanged.connect(self.save_combat_session_name)
-        layout.addWidget(name_lineedit)
+        self.name_lineedit = QLineEdit()
+        self.name_lineedit.setToolTip(tooltip)
+        self.name_lineedit.setText(self.settings.value("CombatSessionName", Globals.DEFAULT_COMBAT_SESSION_NAME, str))
+        self.name_lineedit.textChanged.connect(self.save_combat_session_name)
+        layout.addWidget(self.name_lineedit)
+
+        # Set initial enabled state based on current naming mode
+        self.update_name_field_state(current_mode)
 
         #Associate Procs to Powers
         tooltip = "Toggle whether to associate procs to powers or make them their own ability"
         proc_label = QLabel("Associate Procs to Powers:")
         proc_label.setToolTip(tooltip)
 
-        proc_checkbox = QCheckBox(checked=self.settings.value("AssociateProcsToPowers", Globals.DEFAULT_ASSOCIATE_PROCS_TO_POWERS, bool))
+        proc_checkbox = QCheckBox()
+        proc_checkbox.setChecked(self.settings.value("AssociateProcsToPowers", Globals.DEFAULT_ASSOCIATE_PROCS_TO_POWERS, bool))
         proc_checkbox.setToolTip(tooltip)
         proc_checkbox.stateChanged.connect(self.save_associate_procs_to_powers)
 
@@ -65,12 +87,28 @@ class SettingsWindow(QDialog):
         auto_update_checkbox = QCheckBox()
         auto_update_checkbox.setToolTip(tooltip)
         auto_update_checkbox.setChecked(self.settings.value("AutoUpdateLogFile", Globals.DEFAULT_AUTO_UPDATE_LOG_FILE, bool))
-  
+        auto_update_checkbox.stateChanged.connect(self.save_auto_update_log_file)
+
         auto_update_layout = QHBoxLayout()
         auto_update_layout.addWidget(auto_update_label)
         auto_update_layout.addWidget(auto_update_checkbox)
         layout.addLayout(auto_update_layout)
-        
+
+        # Process log before starting
+        tooltip = "Process all existing log entries before monitoring for new activity when 'Start Log' is clicked"
+        process_before_start_label = QLabel("Process Log before Starting:")
+        process_before_start_label.setToolTip(tooltip)
+
+        process_before_start_checkbox = QCheckBox()
+        process_before_start_checkbox.setToolTip(tooltip)
+        process_before_start_checkbox.setChecked(self.settings.value("ProcessLogBeforeStarting", False, bool))
+        process_before_start_checkbox.stateChanged.connect(self.save_process_log_before_starting)
+
+        process_before_start_layout = QHBoxLayout()
+        process_before_start_layout.addWidget(process_before_start_label)
+        process_before_start_layout.addWidget(process_before_start_checkbox)
+        layout.addLayout(process_before_start_layout)
+
         # Console Verbosity
         tooltip = "The amount of information to display in the console - For Debug purposes only, this WILL impact performance"
         verbosity_label = QLabel("Console Verbosity:")
@@ -91,7 +129,7 @@ class SettingsWindow(QDialog):
 
 
         cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.close)
+        cancel_button.clicked.connect(self.close_window)
      
 
         button_layout = QHBoxLayout()
@@ -105,11 +143,26 @@ class SettingsWindow(QDialog):
         self.setLayout(layout)
         apply_stylesheet(self)
 
+    def update_name_field_state(self, naming_mode):
+        '''Enable/disable the custom name field based on naming mode'''
+        if naming_mode == "Custom Name":
+            self.name_lineedit.setEnabled(True)
+        else:
+            self.name_lineedit.setEnabled(False)
+
+    def on_naming_mode_changed(self, text):
+        '''Handle naming mode changes'''
+        self.save_combat_session_naming_mode(text)
+        self.update_name_field_state(text)
+
     def save_combat_session_timeout(self, value):
         self.settings.setValue("CombatSessionTimeout", value)
 
     def save_combat_session_name(self, text):
         self.settings.setValue("CombatSessionName", text)
+
+    def save_combat_session_naming_mode(self, text):
+        self.settings.setValue("CombatSessionNamingMode", text)
 
     def save_console_verbosity(self, value):
         self.settings.setValue("ConsoleVerbosity", value)
@@ -119,9 +172,15 @@ class SettingsWindow(QDialog):
 
     def save_auto_update_log_file(self, value):
         self.settings.setValue("AutoUpdateLogFile", value)
-        
+
+    def save_process_log_before_starting(self, value):
+        self.settings.setValue("ProcessLogBeforeStarting", value)
+
     def save_settings(self):
         self.settings.sync()
+        self.close()
+
+    def close_window(self):
         self.close()
 
 if __name__ == "__main__":
