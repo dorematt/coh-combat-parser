@@ -112,12 +112,9 @@ class CombatSession(QObject):
 
     def get_highest_damaged_enemy(self):
         '''Returns the name of the enemy that took the most damage in the session
-        If no targets exist, fall back to characters or return None'''
+        If no targets exist, return None'''
         if not self.targets:
-            if self.chars:
-                '''return the first character'''
-                return next(iter(self.chars)).get_name()
-            return None # No targets recorded
+            return None  # No targets recorded
 
         highest_enemy = None
         highest_damage = 0

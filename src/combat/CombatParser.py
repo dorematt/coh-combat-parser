@@ -177,6 +177,45 @@ class Parser(QObject):
 
         return base_name + " " + str(self.session_name_count)
 
+    def update_session_name_if_needed(self, session, allow_live_updates=False):
+        '''Checks if session name should be updated based on current naming mode and updates if needed
+
+        :param session: The CombatSession object to check/update
+        :param allow_live_updates: If True, allows "Highest Enemy Damaged" mode to update during live monitoring
+        :return: True if the session name was updated, False otherwise
+        '''
+        # Don't update if user has set a custom name
+        if self.user_session_name != "":
+            return False
+
+        # Only process enemy-based naming modes
+        if self.COMBAT_SESSION_NAMING_MODE not in ["First Enemy Damaged", "Highest Enemy Damaged"]:
+            return False
+
+        new_base_name = self.get_session_base_name(session)
+        current_name = session.get_name()
+        should_update = False
+
+        # Always transition from fallback to enemy name
+        if new_base_name is not None and new_base_name != self.COMBAT_SESSION_NAME:
+            if current_name.startswith(self.COMBAT_SESSION_NAME + " "):
+                should_update = True
+            # For "Highest Enemy Damaged" mode, update when highest changes (if allowed)
+            elif self.COMBAT_SESSION_NAMING_MODE == "Highest Enemy Damaged" and allow_live_updates:
+                # Extract current base name (without number suffix)
+                current_base = " ".join(current_name.split(" ")[:-1])
+                if current_base != new_base_name:
+                    should_update = True
+
+        if should_update:
+            new_name = self.generate_session_name(session)
+            session.set_name(new_name)
+            if self.CONSOLE_VERBOSITY >= 3:
+                print(f"     Session renamed from '{current_name}' to '{new_name}'")
+            return True
+
+        return False
+
     def new_session(self, timestamp):
         self.session_count += 1
         # Create session and generate initial name
@@ -466,22 +505,8 @@ class Parser(QObject):
         target_name = data["target"]
         if damage > 0:
             this_session.set_first_enemy_damaged(target_name)
-
-            # Update session name if using enemy-based naming and no custom name is set
-            if self.user_session_name == "":
-                if self.COMBAT_SESSION_NAMING_MODE in ["First Enemy Damaged", "Highest Enemy Damaged"]:
-                    # Get the current base name from the session
-                    new_base_name = self.get_session_base_name(this_session)
-
-                    # Only update if we now have enemy data (transitioning from fallback)
-                    if new_base_name is not None and new_base_name != self.COMBAT_SESSION_NAME:
-                        current_name = this_session.get_name()
-                        # Check if current name is using the fallback (starts with default session name)
-                        if current_name.startswith(self.COMBAT_SESSION_NAME + " "):
-                            new_name = self.generate_session_name(this_session)
-                            this_session.set_name(new_name)
-                            if self.CONSOLE_VERBOSITY >= 3:
-                                print(f"     Session renamed from '{current_name}' to '{new_name}'")
+            # Update session name if using enemy-based naming
+            self.update_session_name_if_needed(this_session)
 
         caster = this_session.chars[caster]
         target = this_session.targets[target]
@@ -692,10 +717,12 @@ class Parser(QObject):
         # Check if the log file path is set
         if self.LOG_FILE_PATH == "":
             print('          Cannot find Player Name - Log File Path not set')
-        
+
         # Open the log file then read each line from bottom up to match the last player_name pattern
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
-            for line in list(file):
+            lines = list(file)
+            # Iterate from bottom to top to find the most recent player login
+            for line in reversed(lines):
                 event, data = self.extract_from_line(line)
                 if (event == "player_name" or event == "player_name_backup") and isinstance(data, dict):
                     print ('          Player Name Located: ', data["player_name"])
@@ -840,29 +867,8 @@ class Parser(QObject):
                     if duration > 0 and session.get_total_damage() == 0:
                         session.set_start_time(self.GLOBAL_CURRENT_TIME)  # Reset the start time if there's still no damage
 
-                    # Update session name for enemy-based naming modes
-                    if self.user_session_name == "":
-                        if self.COMBAT_SESSION_NAMING_MODE in ["First Enemy Damaged", "Highest Enemy Damaged"]:
-                            new_base_name = self.get_session_base_name(session)
-                            current_name = session.get_name()
-                            should_update = False
-
-                            # Always transition from fallback to enemy name
-                            if new_base_name is not None and new_base_name != self.COMBAT_SESSION_NAME:
-                                if current_name.startswith(self.COMBAT_SESSION_NAME + " "):
-                                    should_update = True
-                                # For "Highest Enemy Damaged" during live monitoring, update when highest changes
-                                elif self.COMBAT_SESSION_NAMING_MODE == "Highest Enemy Damaged" and self.monitoring_live:
-                                    # Extract current base name (without number suffix)
-                                    current_base = " ".join(current_name.split(" ")[:-1])
-                                    if current_base != new_base_name:
-                                        should_update = True
-
-                            if should_update:
-                                new_name = self.generate_session_name(session)
-                                session.set_name(new_name)
-                                if self.CONSOLE_VERBOSITY >= 3:
-                                    print(f"     Session renamed from '{current_name}' to '{new_name}'")
+                    # Update session name for enemy-based naming modes (allow live updates during monitoring)
+                    self.update_session_name_if_needed(session, allow_live_updates=self.monitoring_live)
 
                 except IndexError:
                     print("WARNING     No combat session found to update")
