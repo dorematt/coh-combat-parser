@@ -15,6 +15,7 @@ class CombatSession(QObject):
         self.exp_value = 0
         self.inf_value = 0
         self.name = name
+        self.first_enemy_damaged = None  # Track the first enemy damaged in the session
         
 
     def set_start_time(self, start_time):
@@ -42,12 +43,16 @@ class CombatSession(QObject):
         self.update_duration()
         return self.duration
     
+    def get_count(self):
+        '''Returns the number of characters in the session'''
+        return len(self.chars)
+    
     def get_total_damage(self):
         '''Calculates the total damage for the session'''
         sum = 0
         for char in self.chars:
             sum += self.chars[char].get_total_damage()
-        return round(sum,2)
+        return sum  # Return raw value, rounding should only happen at display layer
     
     def get_average_damage(self):
         '''Calculates the average damage for the session'''
@@ -93,3 +98,34 @@ class CombatSession(QObject):
                 self.chars[name] = Character(name, type)
                 return False
             return True
+
+    def set_first_enemy_damaged(self, enemy_name):
+        '''Sets the first enemy damaged if not already set'''
+        if self.first_enemy_damaged is None:
+            self.first_enemy_damaged = enemy_name
+
+    def get_first_enemy_damaged(self):
+        '''Returns the first enemy damaged in the session, or None if not set'''
+        if self.first_enemy_damaged is None:
+            return None
+        return self.first_enemy_damaged
+
+    def get_highest_damaged_enemy(self):
+        '''Returns the name of the enemy that took the most damage in the session
+        If no targets exist, fall back to characters or return None'''
+        if not self.targets:
+            if self.chars:
+                '''return the first character'''
+                return next(iter(self.chars)).get_name()
+            return None # No targets recorded
+
+        highest_enemy = None
+        highest_damage = 0
+
+        for target_name, target_char in self.targets.items():
+            damage = target_char.get_total_damage()
+            if damage > highest_damage:
+                highest_damage = damage
+                highest_enemy = target_name
+
+        return highest_enemy

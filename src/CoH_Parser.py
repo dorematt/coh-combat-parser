@@ -1,4 +1,8 @@
 def main():
+    '''
+    Main entry point for the application.
+    Initializes the UI and displays the main window.
+    '''
     from ui.MainUI import MainUI
     from data.Globals import Globals
     from PyQt5.QtWidgets import QApplication

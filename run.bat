@@ -128,4 +128,3 @@ python CoH_Parser.py
 REM Deactivate on exit
 deactivate
 
-pause

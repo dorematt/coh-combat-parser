@@ -10,11 +10,14 @@ from combat.CombatSession import CombatSession
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, QTimer, QCoreApplication, QSettings
 from data.Globals import Globals
 from data.pseudopets import is_pseudopet
+from data.no_hit_abilities import is_no_hit_ability
 from data.LogPatterns import PATTERNS, PATTERN_DATETIME
 CLI_MODE = False # Flipped to True if this .py file is launched directly instead of through the UI
 
 class Parser(QObject):
-    '''Extracts data from log lines using regex patterns, Will return a list of tuples containing the log entry type and a dictionary of the extracted data.'''
+    '''
+    This class handles parsing the combat log file, either live or from an existing file. It will iterate through a given log file, setting up combat sessions and organizing data as it goes.
+    '''
 
     LOG_FILE_PATH = ""
     log_file = None
@@ -25,6 +28,7 @@ class Parser(QObject):
     combat_mutex = QMutex()
     sig_finished = pyqtSignal(list)
     sig_periodic_update = pyqtSignal(list)
+    sig_error = pyqtSignal(str, str)  # Signal for errors (message, title)
     parentThread = None
     final_update = False # Flag to indicate if a final update is required
     user_session_name = ""
@@ -50,6 +54,7 @@ class Parser(QObject):
         self.no_hitroll_ability_list = {} # Stores a list of abilities that have no hit roll events (ie. were discovered and added using a damage event)
         self.session_count = 0 # Stores the number of combat sessions and also acts as a key to which combat session within the combat_session array is active
         self.session_name_count = 0 # For counting the number of sessions with the same name
+        self.last_session_base_name = "" # Stores the base name (without number) of the last session for increment reset logic
         self.combat_session_live = False # Flag to indicate if a combat session is active
         self.in_combat = False # Flag to indicate that the player is/has dealing damage
         self.global_combat_duration = 0 # Stores the total durations of all combat sessions
@@ -80,7 +85,9 @@ class Parser(QObject):
     
     def extract_from_line(self, log_line):
         '''Extracts data from a log line using regex patterns, returns a string for the log entry type and a dict of the extracted data.'''
-        for key, regex in PATTERNS.items():
+        # Use self.PATTERNS if it exists (updated with player name), otherwise fall back to module PATTERNS
+        patterns = getattr(self, 'PATTERNS', PATTERNS)
+        for key, regex in patterns.items():
             match = regex.match(log_line)
             if match:
                 return (key, match.groupdict())
@@ -93,15 +100,93 @@ class Parser(QObject):
                 return (key, match.groupdict())
         return '',[]
 
+    def get_session_base_name(self, session):
+        '''Determines the base name for a session based on the current naming mode
+
+        :param session: The CombatSession object to get base name for
+        :return: The base name (without numerical suffix), or None if not yet available
+        '''
+        # If user has set a custom name via command, use it (highest priority)
+        if self.user_session_name != "":
+            return self.user_session_name
+
+        # Check naming mode
+        if self.COMBAT_SESSION_NAMING_MODE == "First Enemy Damaged":
+            first_enemy = session.get_first_enemy_damaged()
+            return first_enemy if first_enemy else None
+        elif self.COMBAT_SESSION_NAMING_MODE == "Highest Enemy Damaged":
+            highest_enemy = session.get_highest_damaged_enemy()
+            return highest_enemy if highest_enemy else None
+        else:  # Default to "Custom Name" mode
+            return self.COMBAT_SESSION_NAME
+
+    def get_last_session_number_for_base_name(self, base_name, current_session_index=None):
+        '''Finds the highest session number used for a given base name in previous sessions
+
+        :param base_name: The base name to search for
+        :param current_session_index: Index of current session to exclude (if updating existing session)
+        :return: The highest number used, or 0 if not found
+        '''
+        max_number = 0
+        for i, sess in enumerate(self.combat_session_data):
+            # Skip the current session if we're updating it
+            if current_session_index is not None and i == current_session_index:
+                continue
+
+            sess_name = sess.get_name()
+            # Extract base name by removing the last word (number)
+            parts = sess_name.rsplit(" ", 1)
+            if len(parts) == 2:
+                sess_base = parts[0]
+                try:
+                    sess_num = int(parts[1])
+                    if sess_base == base_name and sess_num > max_number:
+                        max_number = sess_num
+                except ValueError:
+                    pass  # Not a number suffix
+
+        return max_number
+
+    def generate_session_name(self, session, is_new_session=False):
+        '''Generates a session name based on the current naming mode setting
+
+        :param session: The CombatSession object to generate a name for
+        :param is_new_session: True if this is a brand new session being created
+        :return: The generated name with numerical suffix
+        '''
+        base_name = self.get_session_base_name(session)
+
+        # If we don't have a base name yet (no enemy data), use fallback
+        if base_name is None:
+            base_name = self.COMBAT_SESSION_NAME
+
+        # Determine the session number
+        if is_new_session:
+            # For new sessions, check last session's base name
+            if base_name != self.last_session_base_name:
+                self.session_name_count = 0
+                self.last_session_base_name = base_name
+            self.session_name_count += 1
+        else:
+            # For updates to existing session, look through session history
+            # Find the current session's index
+            current_index = len(self.combat_session_data) - 1
+            last_num = self.get_last_session_number_for_base_name(base_name, current_index)
+            self.session_name_count = last_num + 1
+            self.last_session_base_name = base_name
+
+        return base_name + " " + str(self.session_name_count)
+
     def new_session(self, timestamp):
         self.session_count += 1
-        if self.user_session_name == "": 
-            self.session_name_count +=1
-            name = self.COMBAT_SESSION_NAME + " " + str(self.session_name_count)
-        else:
-            self.session_name_count += 1
-            name = self.user_session_name + " " + str(self.session_name_count)
-        self.combat_session_data.append(CombatSession(timestamp,name))
+        # Create session and generate initial name
+        new_session = CombatSession(timestamp, "")
+        self.combat_session_data.append(new_session)
+
+        # Generate the name based on naming mode (will use fallback if no enemy data yet)
+        name = self.generate_session_name(new_session, is_new_session=True)
+        new_session.set_name(name)
+
         self.combat_session_live = True
         self.in_combat = False
         if self.monitoring_live: self.interval_timer.start() # Begins periodic UI refreshes
@@ -109,7 +194,11 @@ class Parser(QObject):
         return self.combat_session_data[-1]
     
     def check_session(self, timestamp):
-        '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration'''
+        '''Checks sessions, returns an int code for whether the session, exists or is outside the timeout duration
+        
+        :param timestamp: Current timestamp to check against
+        :return: 1 = Session active and valid, 0 = No active session, -1 = Session timed out
+        '''
 
         if self.combat_session_live:
             # print('     Checking Session: ', self.session_count, ' With a duration of ', self.session[-1].get_duration(), ' seconds')
@@ -125,12 +214,34 @@ class Parser(QObject):
         return 0 # No active session
     
     def end_current_session(self):
-        '''Ends the current combat session'''
-        self.combat_session_data[-1].update_duration()
+        '''Ends the current combat session, finalizes session naming if necessary, calls one last live_monitoring update'''
+        session = self.combat_session_data[-1]
+        session.update_duration()
+
+        # Final name update for "Highest Enemy Damaged" mode
+        if self.user_session_name == "" and self.COMBAT_SESSION_NAMING_MODE == "Highest Enemy Damaged":
+            highest_enemy = session.get_highest_damaged_enemy()
+            if highest_enemy is not None:
+                current_name = session.get_name()
+                # Extract current base name (without number suffix)
+                current_base = " ".join(current_name.split(" ")[:-1])
+
+                # Only update if the highest enemy is different from current name
+                if current_base != highest_enemy:
+                    new_name = self.generate_session_name(session)
+                    session.set_name(new_name)
+                    if self.CONSOLE_VERBOSITY >= 2:
+                        print(f"     Final session rename from '{current_name}' to '{new_name}' (highest damaged enemy)")
+
         self.combat_session_live = False
-        self.add_global_combat_duration(self.combat_session_data[-1].get_duration())
-        if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", self.combat_session_data[-1].get_duration(), " seconds \n")
+        self.add_global_combat_duration(session.get_duration())
+        if self.CONSOLE_VERBOSITY >= 2: print ("---------->  Ended Combat Session: ", self.session_count, " With a duration of ", session.get_duration(), " seconds \n")
         if self.monitoring_live: self.final_update = True
+
+        # Emit periodic update when processing existing logs (for UI updates during initial processing)
+        # Don't hold mutex while emitting signal to avoid blocking
+        if self.processing_live and not self.monitoring_live:
+            self.sig_periodic_update.emit(self.combat_session_data)
     
     def remove_last_session(self):
         '''Removes the current combat session, usually for instances where the session has no damage-related events'''
@@ -292,6 +403,14 @@ class Parser(QObject):
             if char.get_type() == "pet": char_ability.ability_used() # We don't have power activation events for pets, so we'll use the hit roll as a proxy for ability usage
             char_ability.ability_hit(data["outcome"] == "HIT")
 
+        # When associating procs and ability hits successfully, increment parent_hits for all proc damage components
+        # Only do this for the caster's ability, not the target's (to avoid double-counting)
+        if self.associating_procs and data["outcome"] == "HIT":
+            caster_ability = caster.abilities[this_ability]
+            for damage_component in caster_ability.damage:
+                if damage_component.is_proc:
+                    damage_component.increment_parent_hits()
+
         # Update the caster's last_ability to ensure procs are associated correctly
         # This is especially important for non-damaging abilities (debuffs, buffs, etc.)
         caster.last_ability = caster.abilities[this_ability]
@@ -343,23 +462,69 @@ class Parser(QObject):
         if not check_target:
             if self.CONSOLE_VERBOSITY >= 3: print("     Added New Target: ", this_session.targets[target].get_name(), " to Session: ", self.session_count, ' via Damage Event')
 
+        # Track first enemy damaged for session naming (only if damage > 0)
+        target_name = data["target"]
+        if damage > 0:
+            this_session.set_first_enemy_damaged(target_name)
+
+            # Update session name if using enemy-based naming and no custom name is set
+            if self.user_session_name == "":
+                if self.COMBAT_SESSION_NAMING_MODE in ["First Enemy Damaged", "Highest Enemy Damaged"]:
+                    # Get the current base name from the session
+                    new_base_name = self.get_session_base_name(this_session)
+
+                    # Only update if we now have enemy data (transitioning from fallback)
+                    if new_base_name is not None and new_base_name != self.COMBAT_SESSION_NAME:
+                        current_name = this_session.get_name()
+                        # Check if current name is using the fallback (starts with default session name)
+                        if current_name.startswith(self.COMBAT_SESSION_NAME + " "):
+                            new_name = self.generate_session_name(this_session)
+                            this_session.set_name(new_name)
+                            if self.CONSOLE_VERBOSITY >= 3:
+                                print(f"     Session renamed from '{current_name}' to '{new_name}'")
+
         caster = this_session.chars[caster]
         target = this_session.targets[target]
-        
+
         if proc:
-            if flair != "": 
+            if flair != "":
                 proc_name = (data["ability"] + " (" + data["damage_flair"] + ")")
             else:
-                proc_name = data["ability"] 
+                proc_name = data["ability"]
 
             if caster.last_ability is not None and self.associating_procs: # We'll check and process procs first
+                # Check if this proc damage component already exists
+                existing_proc = None
+                for component in caster.last_ability.damage:
+                    if component.type == proc_name:
+                        existing_proc = component
+                        break
 
-                caster.last_ability.add_damage(DamageComponent(proc_name),damage)
-                
+                if existing_proc is None:
+                    # First time this proc fires - create new component and initialize parent_hits
+                    proc_component = DamageComponent(proc_name, is_proc=True)
+                    proc_component.parent_hits = caster.last_ability.get_hits()
+                    caster.last_ability.add_damage(proc_component, damage)
+                else:
+                    # Proc already exists - just add damage
+                    caster.last_ability.add_damage(DamageComponent(proc_name, is_proc=True), damage)
+
                 if target.last_ability is not None:
-                    target.last_ability.add_damage(DamageComponent(proc_name),damage)
+                    # Check if this proc damage component already exists for target
+                    existing_target_proc = None
+                    for component in target.last_ability.damage:
+                        if component.type == proc_name:
+                            existing_target_proc = component
+                            break
+
+                    if existing_target_proc is None:
+                        target_proc_component = DamageComponent(proc_name, is_proc=True)
+                        target_proc_component.parent_hits = target.last_ability.get_hits()
+                        target.last_ability.add_damage(target_proc_component, damage)
+                    else:
+                        target.last_ability.add_damage(DamageComponent(proc_name, is_proc=True), damage)
                 return
-            elif damage == 0: 
+            elif damage == 0:
                 if self.CONSOLE_VERBOSITY >= 2: print(f"Ignoring zero-damage proc event: {data['ability']} on {data['target']}")
                 return 
             
@@ -370,13 +535,14 @@ class Parser(QObject):
         # Find ability in char list and add damage component, both for caster and the target
         for char in [caster, target]:
             char_ability = this_ability
-            
+
             if char_ability not in char.abilities:
-                char.abilities[char_ability] = Ability(char_ability)
+                char.abilities[char_ability] = Ability(char_ability, proc=proc)
                 if self.CONSOLE_VERBOSITY >= 2:
                     print(f"     Added Ability: {char_ability} to Character: {char.get_name()} via Damage Event")
 
             char_ability = char.get_ability(char_ability)
+
             caster_ability = caster.get_ability(this_ability)
 
 
@@ -386,7 +552,7 @@ class Parser(QObject):
 
             # Some DoT auras don't have hit rolls recorded in the log when they hit, so we'll put those abilities in a list to treat damage events as successful hits as well
             if not proc and caster_ability.get_hits() == 0:
-                    if any(word in char_ability.get_name() for word in Globals.NO_HIT_ABILITIES): 
+                    if is_no_hit_ability(char_ability.get_name()):
                         self.no_hitroll_ability_list[char_ability] = False # This ability is auto-hit and should not be included in hit-roll stats
                     else:
                         self.no_hitroll_ability_list[char_ability] = True # This ability is dependent on a hit-roll and should be included in hit-roll stats
@@ -429,11 +595,11 @@ class Parser(QObject):
     def handle_event_command(self, data):
         if data["command"] == "SET_NAME":
             self.user_session_name = data["value"]
-            self.session_name_count = 0
+            self.last_session_base_name = ""  # Reset to trigger counter reset
             if self.CONSOLE_VERBOSITY >= 2 or self.monitoring_live: print ("          Setting Session Name to: ", self.user_session_name, '\n')
             if self.combat_session_live:
-                self.session_name_count += 1
-                self.combat_session_data[-1].set_name(data["value"] + " " + str(self.session_name_count))
+                new_name = self.generate_session_name(self.combat_session_data[-1])
+                self.combat_session_data[-1].set_name(new_name)
                 if self.monitoring_live: print ("Updated Active Combat Session Name: ", self.combat_session_data[-1].get_name(), '\n')
         elif data["command"] == "START_SESSION":
 
@@ -441,12 +607,12 @@ class Parser(QObject):
                 print ("    Active session ending from chat command")
                 self.end_current_session()
                 self.print_session_results(self.combat_session_data[-1])
-            
+
 
             if data["value"] != "":
                 self.user_session_name = data["value"]
-                self.session_name_count = 0
-            
+                self.last_session_base_name = ""  # Reset to trigger counter reset
+
             self.new_session(self.GLOBAL_CURRENT_TIME)
 
     
@@ -467,14 +633,31 @@ class Parser(QObject):
         self.global_combat_duration += duration
         return self.global_combat_duration
     def get_log_duration(self):
-        '''Calculates the duration of the log file'''
+        '''Calculates the duration of the log file across all combat sessions
+        
+        :param self: Parser instance
+        :return: Duration of the log file in seconds'''
+        for session in self.combat_session_data:
+            self.global_combat_duration += session.get_duration()
+
         return self.GLOBAL_CURRENT_TIME - self.GOBAL_START_TIME
-    def get_dps(self, duration):
-        '''Calculates the DPS for the player'''
+    def get_log_dps(self):
+        '''
+        Get the total DPS across all combat sessions in the log file.
+        
+        :param self: Parser instance
+        :return: Total DPS as a float
+        :rtype: float
+        '''
         total_damage = 0
-        for ability in self.abilities:
-            total_damage += self.abilities[ability].get_total_damage()
-        return round(total_damage / duration, 2)
+        duration = 0
+        for session in self.combat_session_data:
+            total_damage += session.get_total_damage()
+            duration += session.get_duration()
+        if duration == 0 or total_damage == 0:
+            return 0
+        else:
+            return total_damage / duration
     
     def add_exp(self, exp_value):
         '''Adds the exp value to the total exp'''
@@ -514,7 +697,7 @@ class Parser(QObject):
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             for line in list(file):
                 event, data = self.extract_from_line(line)
-                if event == "player_name" or event == "player_name_backup":
+                if (event == "player_name" or event == "player_name_backup") and isinstance(data, dict):
                     print ('          Player Name Located: ', data["player_name"])
                     return data["player_name"]
 
@@ -549,11 +732,13 @@ class Parser(QObject):
         #Open file and iterate through each line
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             refresher = 0 #just keeps the UI responsive
+            ui_update_counter = 0 # Counter for periodic UI updates
             self.processing_live = True
             for line in file:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 refresher += 1
+                ui_update_counter += 1
                 if event != "":
                     if self.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
@@ -561,8 +746,17 @@ class Parser(QObject):
                     refresher = 0
                     QCoreApplication.processEvents()
                     if not self.processing_live: break
+
+                # Emit periodic UI updates every 1000 lines for better responsiveness
+                # Don't hold mutex while emitting signal to avoid blocking
+                if ui_update_counter > 1000:
+                    ui_update_counter = 0
+                    self.sig_periodic_update.emit(self.combat_session_data)
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
-        self.sig_finished.emit(self.combat_session_data)
+
+        # Only emit sig_finished if not suppressed (used when processing existing then starting live)
+        if not getattr(self, 'suppress_finished_signal', False):
+            self.sig_finished.emit(self.combat_session_data)
         return True
     
     @pyqtSlot()
@@ -589,9 +783,28 @@ class Parser(QObject):
         self.log_file.seek(0, 2)
         
     def monitoring_loop(self):
+        '''
+        Reads new lines from the log file and processes them in real-time. This then calls the interpret_event function to handle the extracted data.
 
-        file = self.log_file
-        line = file.readline()
+        :param self: Description
+        '''
+        try:
+            file = self.log_file
+            if file is None:
+                raise Exception("Cannot read from log file.")
+            line = file.readline()
+        except Exception as e:
+            # Stop the monitoring timer to prevent repeated error attempts
+            self.monitoring_timer.stop()
+            self.monitoring_live = False
+
+            # Emit error signal for UI to display
+            error_message = f"Cannot read from log file: {str(e)}"
+            self.sig_error.emit(error_message, "Log File Error")
+
+            if self.CONSOLE_VERBOSITY >= 1:
+                print(f"ERROR     {error_message}")
+            return
         if not line: return
         event, data = self.extract_from_line(line)
         self.line_count += 1
@@ -627,6 +840,30 @@ class Parser(QObject):
                     if duration > 0 and session.get_total_damage() == 0:
                         session.set_start_time(self.GLOBAL_CURRENT_TIME)  # Reset the start time if there's still no damage
 
+                    # Update session name for enemy-based naming modes
+                    if self.user_session_name == "":
+                        if self.COMBAT_SESSION_NAMING_MODE in ["First Enemy Damaged", "Highest Enemy Damaged"]:
+                            new_base_name = self.get_session_base_name(session)
+                            current_name = session.get_name()
+                            should_update = False
+
+                            # Always transition from fallback to enemy name
+                            if new_base_name is not None and new_base_name != self.COMBAT_SESSION_NAME:
+                                if current_name.startswith(self.COMBAT_SESSION_NAME + " "):
+                                    should_update = True
+                                # For "Highest Enemy Damaged" during live monitoring, update when highest changes
+                                elif self.COMBAT_SESSION_NAMING_MODE == "Highest Enemy Damaged" and self.monitoring_live:
+                                    # Extract current base name (without number suffix)
+                                    current_base = " ".join(current_name.split(" ")[:-1])
+                                    if current_base != new_base_name:
+                                        should_update = True
+
+                            if should_update:
+                                new_name = self.generate_session_name(session)
+                                session.set_name(new_name)
+                                if self.CONSOLE_VERBOSITY >= 3:
+                                    print(f"     Session renamed from '{current_name}' to '{new_name}'")
+
                 except IndexError:
                     print("WARNING     No combat session found to update")
                 
@@ -651,6 +888,7 @@ class Parser(QObject):
         self.CONSOLE_VERBOSITY = self.settings.value("ConsoleVerbosity", Globals.DEFAULT_CONSOLE_VERBOSITY, int)
         self.COMBAT_SESSION_TIMEOUT = self.settings.value("CombatSessionTimeout", Globals.DEFAULT_COMBAT_SESSION_TIMEOUT, int)
         self.COMBAT_SESSION_NAME = self.settings.value("CombatSessionName", Globals.DEFAULT_COMBAT_SESSION_NAME, str)
+        self.COMBAT_SESSION_NAMING_MODE = self.settings.value("CombatSessionNamingMode", Globals.DEFAULT_COMBAT_SESSION_NAMING_MODE, str)
 
     def on_sig_stop_monitoring(self):
         '''Stops monitoring the log file'''
