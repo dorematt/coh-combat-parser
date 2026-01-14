@@ -116,7 +116,7 @@ class CombatSession(QObject):
         if not self.targets:
             if self.chars:
                 '''return the first character'''
-                return next(iter(self.chars)).get_name()
+                return next(iter(self.chars))
             return None # No targets recorded
 
         highest_enemy = None

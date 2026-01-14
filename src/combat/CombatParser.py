@@ -813,7 +813,8 @@ class Parser(QObject):
             self.interpret_event(event, data)
         else:
             event, data = self.extract_datetime_from_line(line)
-            self.interpret_event(event, data)
+            if event != "":
+                self.interpret_event(event, data)
 
     def live_log_interval_update(self):
         '''Calls a recalculation of the current combat session data and emits a signal to update the UI. This function is called by the interval_timer'''
