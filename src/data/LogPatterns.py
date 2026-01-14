@@ -13,10 +13,10 @@ PATTERNS = {
         r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * (?P<outcome>HIT|MISS(?:ED)?) (?P<target>[^.!]+)(?:!!|!) Your (?P<ability>[^.]+) power (?:had a .*?chance to hit, you rolled a (\d+\.\d+)|was forced to hit by streakbreaker)\."
     ),
     "player_damage": re.compile(
-        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
+        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?:PLAYER_NAME:  )?(?:You (?:hit|hits you with their)|HIT) (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>.+?(?= for \d)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
     ),
     "player_pet_damage": re.compile(
-        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * You hit (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>(?:Recharge/Chance [\w\s]+|[\w\s]+)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
+        r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<pet_name>[^:]+?):? * You hit (?P<target>[^:]+) with your (?P<ability>[^:]+)(?:: (?P<ability_desc>.+?(?= for \d)))? for (?P<damage_value>[\d.]+) points of (?P<damage_type>[^\d]+) damage(?: \((?P<damage_flair>[^\)]+)\))?(?: over time)?\.*"
     ),
     # "foe_hit_roll": re.compile(
     #     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<enemy>.+?) (?P<outcome>HIT|MISSES you!|HIT |MISS(?:ED)?) (?:(?P<ability>.+?) power had a .* to hit and rolled a .*\.?)?"
