@@ -732,13 +732,11 @@ class Parser(QObject):
         #Open file and iterate through each line
         with open(self.LOG_FILE_PATH, 'r', encoding='utf-8') as file:
             refresher = 0 #just keeps the UI responsive
-            ui_update_counter = 0 # Counter for periodic UI updates
             self.processing_live = True
             for line in file:
                 event, data = self.extract_from_line(line)
                 self.line_count += 1
                 refresher += 1
-                ui_update_counter += 1
                 if event != "":
                     if self.CONSOLE_VERBOSITY == 4: print(event, data)
                     self.interpret_event(event, data)
@@ -746,12 +744,6 @@ class Parser(QObject):
                     refresher = 0
                     QCoreApplication.processEvents()
                     if not self.processing_live: break
-
-                # Emit periodic UI updates every 1000 lines for better responsiveness
-                # Don't hold mutex while emitting signal to avoid blocking
-                if ui_update_counter > 1000:
-                    ui_update_counter = 0
-                    self.sig_periodic_update.emit(self.combat_session_data)
         print('          Log File processed in: ', round(time.time() - _log_process_start_, 2), ' seconds')
 
         # Only emit sig_finished if not suppressed (used when processing existing then starting live)
